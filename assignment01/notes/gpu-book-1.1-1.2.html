@@ -1,0 +1,855 @@
+<title>GPU 从零读本 · 1.1–1.2</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;900&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a dark "lab notebook" book — sticky chapter rail on the left, one reading column, figures drawn as die-shot style schematics. */
+:root{
+  color-scheme: dark;
+  --ink:#0e1218;        /* page ground: graphite with a faint blue bias */
+  --paper:#151b24;      /* raised surfaces: figures, boxes */
+  --rule:#273142;       /* hairlines */
+  --fg:#dfe5ee;         /* body text */
+  --mute:#8d98aa;       /* captions, labels */
+  --cpu:#e8a54b;        /* CPU / latency — warm amber */
+  --gpu:#4fc3b4;        /* GPU / throughput — cool teal */
+  --mem:#9b8cf0;        /* memory — violet */
+  --warn:#ef7a6b;       /* divergence / pitfalls */
+  --cpu-soft:rgba(232,165,75,.16);
+  --gpu-soft:rgba(79,195,180,.15);
+  --mem-soft:rgba(155,140,240,.15);
+  --warn-soft:rgba(239,122,107,.15);
+  --f-display:"Noto Serif SC","Songti SC",serif;
+  --f-body:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{background:var(--ink);color:var(--fg);font-family:var(--f-body);font-size:16.5px;line-height:1.85;-webkit-font-smoothing:antialiased}
+a{color:var(--gpu);text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--cpu);outline-offset:3px;border-radius:2px}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+code{background:var(--paper);border:1px solid var(--rule);padding:.05em .38em;border-radius:4px;color:#f1d7a8}
+strong{color:#fff;font-weight:700}
+.cpu{color:var(--cpu)} .gpu{color:var(--gpu)} .memc{color:var(--mem)} .warnc{color:var(--warn)}
+
+.shell{display:grid;grid-template-columns:240px minmax(0,1fr);gap:56px;max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 96px}
+@media (max-width:900px){.shell{grid-template-columns:minmax(0,1fr);gap:0}}
+
+/* chapter rail */
+.rail{position:sticky;top:env(safe-area-inset-top,0px);align-self:start;padding-top:48px;max-height:100vh;overflow:auto;font-size:13.5px;line-height:1.6}
+.rail h2{font-family:var(--f-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);font-weight:400;margin:0 0 12px}
+.rail ol{list-style:none;margin:0 0 22px;padding:0;display:grid;gap:2px}
+.rail a{display:grid;grid-template-columns:3.6em 1fr;gap:6px;color:var(--mute);text-decoration:none;padding:4px 8px;border-left:2px solid transparent}
+.rail a:hover{color:var(--fg);border-left-color:var(--rule)}
+.rail a.on{color:var(--fg);border-left-color:var(--gpu)}
+.rail a span:first-child{font-family:var(--f-mono);font-size:12px}
+@media (max-width:900px){.rail{display:none}}
+
+main{min-width:0;max-width:720px}
+
+/* cover */
+.cover{padding-block:72px 40px;border-bottom:1px solid var(--rule);margin-bottom:24px}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--mute)}
+.cover h1{font-family:var(--f-display);font-weight:900;font-size:clamp(40px,7vw,68px);line-height:1.12;margin:14px 0 18px;text-wrap:balance;letter-spacing:.01em}
+.cover h1 .c{color:var(--cpu)} .cover h1 .g{color:var(--gpu)}
+.cover p.lede{font-size:18px;color:#c4ccd8;max-width:36em;margin:0}
+.meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:26px;font-size:13px;color:var(--mute)}
+.meta b{color:var(--fg);font-weight:500}
+
+/* chapters */
+.part{margin-top:72px}
+.part-head{display:flex;align-items:baseline;gap:18px;border-bottom:1px solid var(--rule);padding-bottom:12px;margin-bottom:8px;flex-wrap:wrap}
+.part-head .num{font-family:var(--f-mono);font-size:44px;font-weight:600;color:var(--gpu);line-height:1}
+.part-head h2{font-family:var(--f-display);font-weight:900;font-size:32px;margin:0;line-height:1.25;text-wrap:balance}
+.part-head .en{font-family:var(--f-mono);font-size:12px;color:var(--mute);letter-spacing:.08em;flex-basis:100%}
+section.sec{margin-top:52px;scroll-margin-top:24px}
+section.sec h3{font-family:var(--f-display);font-weight:600;font-size:23px;line-height:1.35;margin:0 0 6px;text-wrap:balance}
+section.sec h3 .n{font-family:var(--f-mono);font-size:14px;font-weight:400;color:var(--gpu);margin-right:10px;letter-spacing:.04em}
+section.sec h4{font-size:16.5px;margin:28px 0 4px;color:#fff}
+p{margin:12px 0}
+ul.tight{margin:10px 0;padding-left:1.3em} ul.tight li{margin:4px 0}
+
+/* figures */
+figure{margin:26px 0;background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:18px 18px 12px}
+figure .scroll{overflow-x:auto}
+figure svg{display:block;width:100%;height:auto;min-width:520px}
+figure.narrow svg{min-width:0}
+figcaption{font-size:13.5px;color:var(--mute);margin-top:10px;line-height:1.65}
+figcaption b{color:var(--fg);font-weight:500;margin-right:6px;font-family:var(--f-mono);font-size:12px}
+svg text{font-family:var(--f-body);fill:var(--fg)}
+svg .lbl{font-size:13px} svg .sm{font-size:11px;fill:var(--mute)} svg .mono{font-family:var(--f-mono)}
+svg .t-cpu{fill:var(--cpu)} svg .t-gpu{fill:var(--gpu)} svg .t-mem{fill:var(--mem)} svg .t-warn{fill:var(--warn)} svg .t-ink{fill:var(--ink)}
+svg .b-cpu{fill:var(--cpu-soft);stroke:var(--cpu);stroke-width:1.2}
+svg .b-gpu{fill:var(--gpu-soft);stroke:var(--gpu);stroke-width:1.2}
+svg .b-mem{fill:var(--mem-soft);stroke:var(--mem);stroke-width:1.2}
+svg .b-warn{fill:var(--warn-soft);stroke:var(--warn);stroke-width:1.2}
+svg .b-mute{fill:none;stroke:var(--rule);stroke-width:1.2}
+svg .f-cpu{fill:var(--cpu)} svg .f-gpu{fill:var(--gpu)} svg .f-mem{fill:var(--mem)} svg .f-warn{fill:var(--warn)} svg .f-rule{fill:var(--rule)}
+svg .ln{stroke:var(--mute);stroke-width:1.2;fill:none}
+svg .ln-gpu{stroke:var(--gpu);stroke-width:1.6;fill:none}
+svg .ln-cpu{stroke:var(--cpu);stroke-width:1.6;fill:none}
+svg .dash{stroke-dasharray:4 4}
+
+/* asides */
+.box{border:1px solid var(--rule);border-radius:6px;padding:14px 18px;margin:22px 0;background:var(--paper)}
+.box .tag{font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;display:block;margin-bottom:4px}
+.box p{margin:6px 0}
+.box.key{border-color:var(--gpu)} .box.key .tag{color:var(--gpu)}
+.box.trap{border-color:var(--warn)} .box.trap .tag{color:var(--warn)}
+.box.self{border-style:dashed;border-color:var(--cpu)} .box.self .tag{color:var(--cpu)}
+.box.read .tag{color:var(--mem)}
+.analogy{border-left:3px solid var(--cpu);padding:4px 0 4px 16px;margin:20px 0;color:#c9d0db}
+
+/* tables */
+.tbl{overflow-x:auto;margin:20px 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:520px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);font-weight:400}
+td.num{font-variant-numeric:tabular-nums;font-family:var(--f-mono);font-size:13.5px;white-space:nowrap}
+
+/* glossary */
+dl.gloss{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 20px;margin:18px 0}
+dl.gloss dt{font-family:var(--f-mono);font-size:13.5px;color:var(--gpu);padding-top:2px}
+dl.gloss dd{margin:0;font-size:15px}
+@media (max-width:560px){dl.gloss{grid-template-columns:minmax(0,1fr)} dl.gloss dd{margin-bottom:8px}}
+
+pre{background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:14px 16px;overflow-x:auto;font-family:var(--f-mono);font-size:13.5px;line-height:1.7;margin:18px 0}
+pre .k{color:var(--gpu)} pre .c{color:var(--mute)} pre .s{color:var(--cpu)}
+
+/* mental-model strip */
+.mm{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:28px 0 8px}
+.mm a{display:block;text-decoration:none;color:var(--fg);background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:14px 16px;transition:border-color .15s,transform .15s}
+.mm a:hover{border-color:var(--gpu);transform:translateY(-2px)}
+@media (prefers-reduced-motion: reduce){.mm a{transition:none}.mm a:hover{transform:none}}
+.mm .k{font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;color:var(--gpu)}
+.mm .h{font-family:var(--f-display);font-weight:900;font-size:19px;line-height:1.35;margin:4px 0 6px}
+.mm .d{font-size:13.5px;color:var(--mute);line-height:1.6}
+.tldr{display:flex;gap:12px;align-items:flex-start;background:var(--gpu-soft);border-radius:6px;padding:12px 16px;margin:18px 0;font-size:15.5px}
+.tldr::before{content:"MM";font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;color:var(--ink);background:var(--gpu);border-radius:3px;padding:2px 6px;margin-top:4px;flex:none}
+.story{font-size:16px;color:#cfd6e0;background:linear-gradient(90deg,var(--cpu-soft),transparent 70%);border-radius:6px;padding:12px 16px;margin:16px 0}
+.story b{color:var(--cpu)}
+pre .p{color:var(--mem)}
+.colophon{margin-top:80px;border-top:1px solid var(--rule);padding-top:18px;font-size:13px;color:var(--mute)}
+</style>
+
+<div class="shell">
+<nav class="rail" aria-label="目录">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#p0"><span>0</span><span>读之前：五个词</span></a></li>
+  </ol>
+  <h2>1.1 Introduction</h2>
+  <ol>
+    <li><a href="#s111"><span>1.1.1</span><span>GPU 从哪来</span></a></li>
+    <li><a href="#s112"><span>1.1.2</span><span>为什么用 GPU</span></a></li>
+    <li><a href="#s112b"><span>延迟</span><span>延迟 vs 吞吐</span></a></li>
+    <li><a href="#s113"><span>1.1.3</span><span>快速上手</span></a></li>
+  </ol>
+  <h2>1.2 Programming Model</h2>
+  <ol>
+    <li><a href="#s121"><span>1.2.1</span><span>异构系统</span></a></li>
+    <li><a href="#s122"><span>1.2.2</span><span>GPU 硬件模型</span></a></li>
+    <li><a href="#s1221"><span>.2.1</span><span>Block 与 Grid</span></a></li>
+    <li><a href="#s1222"><span>.2.2</span><span>Warp 与 SIMT</span></a></li>
+    <li><a href="#s1223"><span>.2.3</span><span>Tile 编程</span></a></li>
+    <li><a href="#s123"><span>1.2.3</span><span>GPU 存储</span></a></li>
+    <li><a href="#s1234"><span>.3.4</span><span>Unified Memory</span></a></li>
+  </ol>
+  <h2>收尾</h2>
+  <ol>
+    <li><a href="#map"><span>map</span><span>一页总图</span></a></li>
+    <li><a href="#self"><span>self</span><span>对照作业自测</span></a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="cover">
+  <div class="eyebrow">Session 1 · 配套读本 · CUDA Programming Guide §1.1–1.2</div>
+  <h1>为什么是 <span class="g">GPU</span>，<br>而不是更快的 <span class="c">CPU</span></h1>
+  <p class="lede">AI 时代，kernel 越来越多是 AI 帮你写的。但判断它写得对不对、快不快，靠的是你脑子里那张 GPU 的“心智地图”。这本小书只做一件事：用 20 分钟把这张地图装进你脑子里。</p>
+  <div class="meta">
+    <span>对应：<b>Guide 1.1、1.2</b></span>
+    <span>作业：<b>Module 1（以及 Module 3/4 的铺垫）</b></span>
+    <span>前置：<b>会一点 Python 或 C 即可</b></span>
+  </div>
+  <div class="mm" aria-label="五个核心心智模型">
+    <a href="#s112b"><div class="k">MM 1 · 延迟 vs 吞吐</div><div class="h">CPU 是跑车，GPU 是大巴车队</div><div class="d">单趟慢，但一次拉得多。TFLOPS 是“车队运力”，不是“车速”。</div></a>
+    <a href="#s112b"><div class="k">MM 2 · 宽度</div><div class="h">能不能快，看依赖图有多宽</div><div class="d">同时能做的独立任务不够多，再多的 ALU 也只能干等。</div></a>
+    <a href="#s1221"><div class="k">MM 3 · block</div><div class="h">block 是一个班，整班进教室</div><div class="d">同班同学同处一室、能对话；班与班之间谁先谁后，没人保证。</div></a>
+    <a href="#s1222"><div class="k">MM 4 · warp</div><div class="h">32 人齐步走的方阵</div><div class="d">一个口令 32 人一起做。有人想往左有人想往右，就得分两趟走。</div></a>
+    <a href="#s123"><div class="k">MM 5 · 存储</div><div class="h">数据离得越近，越快越小</div><div class="d">寄存器是口袋，shared 是课桌，显存是图书馆，内存在城另一头。</div></a>
+  </div>
+</header>
+
+<!-- ============ 0 ============ -->
+<section class="sec" id="p0">
+  <h3><span class="n">§0</span>读之前：先认识五个词</h3>
+  <p>后面每一节都会反复用到这几个词。现在不必完全理解，有个印象就行。</p>
+  <dl class="gloss">
+    <dt>延迟 latency</dt><dd><strong>一件事</strong>从开始到完成要多久。单位是时间，比如“一次显存读要 ~500 ns”。</dd>
+    <dt>吞吐 throughput</dt><dd><strong>单位时间</strong>能完成多少件事。单位是“件/秒”，比如 “19.5 TFLOPS” = 每秒 1.95×10<sup>13</sup> 次浮点运算。</dd>
+    <dt>带宽 bandwidth</dt><dd>存储系统的吞吐：每秒能搬多少字节，比如 “2 TB/s”。</dd>
+    <dt>并行 parallelism</dt><dd>同一时刻有多少件<strong>互不依赖</strong>的事在同时推进。</dd>
+    <dt>kernel</dt><dd>在 GPU 上运行的函数。一次启动会让成千上万个线程同时执行同一份代码。</dd>
+  </dl>
+  <div class="box key"><span class="tag">贯穿全书的一句话</span>
+    <p>延迟和吞吐是两个<strong>不同维度</strong>的量。吞吐高不代表延迟低，反之亦然。GPU 的全部设计，都是“牺牲单件事的速度，换总的完成量”。</p>
+  </div>
+  <div class="box read"><span class="tag">为什么 AI 时代还要学这个</span>
+    <p>你可以让 AI 写 kernel，但 AI 写出来的东西常见三种翻车：结果偶尔不对（依赖了 block 顺序）、跑得比 CPU 还慢（并行宽度不够、访存乱跳）、换张卡就崩（资源超限）。这三类问题，本书的五个心智模型各管一块。有了它们，你才能当好 AI 的 reviewer。</p>
+  </div>
+</section>
+
+<!-- ============ PART 1.1 ============ -->
+<div class="part">
+  <div class="part-head"><span class="num">1.1</span><h2>引言：GPU 是什么，为什么用它</h2><span class="en">INTRODUCTION</span></div>
+</div>
+
+<section class="sec" id="s111">
+  <h3><span class="n">1.1.1</span>GPU 从哪来</h3>
+  <p>GPU（Graphics Processing Unit）最初是给 3D 图形用的<strong>固定功能</strong>硬件：把三角形变换到屏幕、给每个像素上色。图形有个天然特点：屏幕上几百万个像素，每个像素的计算几乎一样、又彼此独立。于是硬件设计者造了大量简单的计算单元，让它们同时处理不同的像素。</p>
+  <p>后来这些单元变得可编程（可以写 shader）。人们发现，只要问题也长成“大量相同、独立的小计算”的样子，比如矩阵乘、物理模拟、神经网络，就能借用这股算力。2006 年 NVIDIA 推出 <strong>CUDA</strong>，让你不用假装在画图，直接用类 C++ 的语言给 GPU 写通用程序。</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 640 120" role="img" aria-label="GPU 发展时间线：固定功能图形、可编程 shader、2006 CUDA、Tensor Core 与 AI">
+      <line x1="30" y1="60" x2="610" y2="60" class="ln"/>
+      <g>
+        <circle cx="70" cy="60" r="6" class="f-rule"/><text x="70" y="38" text-anchor="middle" class="lbl">固定功能图形</text><text x="70" y="88" text-anchor="middle" class="sm">1990s</text>
+        <circle cx="230" cy="60" r="6" class="f-rule"/><text x="230" y="38" text-anchor="middle" class="lbl">可编程 shader</text><text x="230" y="88" text-anchor="middle" class="sm">2000s 初</text>
+        <circle cx="390" cy="60" r="8" class="f-gpu"/><text x="390" y="38" text-anchor="middle" class="lbl t-gpu">CUDA 发布</text><text x="390" y="88" text-anchor="middle" class="sm">2006</text>
+        <circle cx="560" cy="60" r="6" class="f-gpu"/><text x="560" y="38" text-anchor="middle" class="lbl">Tensor Core / AI</text><text x="560" y="88" text-anchor="middle" class="sm">2017 →</text>
+      </g>
+    </svg>
+    </div>
+    <figcaption><b>图 1</b>从“只能画图”到“通用并行计算”。关键转折是 CUDA：计算不再需要伪装成图形任务。</figcaption>
+  </figure>
+</section>
+
+<section class="sec" id="s112">
+  <h3><span class="n">1.1.2</span>用 GPU 的好处：晶体管花在哪里</h3>
+  <div class="story">想象两家餐厅，装修预算一样。<b>CPU 餐厅</b>请了 8 位米其林大厨，配超大冷库和一个聪明的经理，每道菜都做得飞快，还会提前猜你下一道点什么。<b>GPU 餐厅</b>雇了一万个只会照单炒菜的厨工，每 32 人共用一个喊口令的领班，冷库很小，但进货通道特别宽。点一份菜，CPU 餐厅先上；来一万人的团餐，GPU 餐厅完胜。</div>
+  <p>Guide 的核心论断只有一句：在相近的价格和功耗下，GPU 的<strong>指令吞吐</strong>和<strong>显存带宽</strong>都远高于 CPU。代价写得也很直白：</p>
+  <p class="analogy">“trading off lower single-thread performance to achieve much greater total throughput.”<br><span class="mono" style="font-size:13px;color:var(--mute)">用更低的单线程性能，换取大得多的总吞吐。（Guide 1.1.2）</span></p>
+  <p>为什么会这样？芯片面积和功耗是有限预算。CPU 和 GPU 把同一笔晶体管预算花在了不同地方：</p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 660 300" role="img" aria-label="CPU 与 GPU 芯片面积分配示意">
+      <text x="160" y="22" text-anchor="middle" class="lbl t-cpu" style="font-weight:700">CPU：少数强大的核</text>
+      <text x="495" y="22" text-anchor="middle" class="lbl t-gpu" style="font-weight:700">GPU：海量简单的核</text>
+      <!-- CPU -->
+      <rect x="20" y="36" width="280" height="200" rx="4" class="b-mute"/>
+      <rect x="30" y="46" width="125" height="60" class="b-cpu"/><text x="92" y="80" text-anchor="middle" class="sm" style="fill:var(--fg)">控制逻辑</text>
+      <rect x="165" y="46" width="125" height="60" class="b-cpu"/><text x="227" y="80" text-anchor="middle" class="sm" style="fill:var(--fg)">控制逻辑</text>
+      <rect x="30" y="112" width="60" height="38" class="f-cpu"/><rect x="95" y="112" width="60" height="38" class="f-cpu"/>
+      <rect x="165" y="112" width="60" height="38" class="f-cpu"/><rect x="230" y="112" width="60" height="38" class="f-cpu"/>
+      <text x="160" y="136" text-anchor="middle" class="sm t-ink" style="font-weight:700">ALU</text>
+      <rect x="30" y="158" width="260" height="68" class="b-mem"/><text x="160" y="196" text-anchor="middle" class="lbl">大缓存 L1 / L2 / L3</text>
+      <!-- GPU -->
+      <rect x="350" y="36" width="290" height="200" rx="4" class="b-mute"/>
+      <g id="gpurows"></g>
+      <rect x="360" y="206" width="270" height="22" class="b-mem"/><text x="495" y="221" text-anchor="middle" class="sm" style="fill:var(--fg)">L2 缓存（相对小）</text>
+      <!-- DRAM -->
+      <rect x="20" y="248" width="280" height="34" rx="3" class="b-mute"/><text x="160" y="270" text-anchor="middle" class="sm">DRAM · 内存 · ~100 GB/s 量级</text>
+      <rect x="350" y="248" width="290" height="34" rx="3" class="b-gpu"/><text x="495" y="270" text-anchor="middle" class="sm" style="fill:var(--fg)">HBM 显存 · ~2–3 TB/s 量级</text>
+    </svg>
+    </div>
+    <figcaption><b>图 2</b>对应 Guide Figure 1 “The GPU Devotes More Transistors to Data Processing”。橙色是 CPU 的计算单元，青色是 GPU 的计算单元。GPU 每一行有一小块控制逻辑（左端深色）和一小块 L1，剩下全是 ALU。带宽数字只是量级，具体看你的卡。</figcaption>
+  </figure>
+
+  <h4>CPU 把预算花在“让一个线程尽快跑完”</h4>
+  <ul class="tight">
+    <li><strong>大缓存</strong>：把常用数据放在离核很近的地方，减少等内存的时间。</li>
+    <li><strong>乱序执行、分支预测</strong>：猜下一步要做什么，提前去做，把等待藏起来。</li>
+    <li><strong>高主频</strong>：4–5 GHz，单条指令很快。</li>
+  </ul>
+  <p>结果：一个 CPU 核处理一串前后依赖的计算非常快，但一颗芯片上只有几个到几十个这样的核。</p>
+
+  <h4>GPU 把预算花在“让很多线程一起推进”</h4>
+  <ul class="tight">
+    <li><strong>大量 ALU</strong>：一块数据中心 GPU 有上万个计算 lane。</li>
+    <li><strong>控制逻辑很省</strong>：一组 32 个线程共用一套取指/译码（这就是后面的 warp）。</li>
+    <li><strong>主频较低</strong>：1–2 GHz。单个线程跑得比 CPU 慢。</li>
+    <li><strong>宽显存总线</strong>：HBM 把显存颗粒和 GPU 封装在一起，用极宽的总线换带宽。</li>
+  </ul>
+
+  <div class="tbl">
+  <table>
+    <thead><tr><th>维度</th><th class="cpu">CPU（典型服务器）</th><th class="gpu">GPU（以 A100 为例）</th></tr></thead>
+    <tbody>
+      <tr><td>同时运行的线程</td><td class="num">几十</td><td class="num">108 SM × 2048 ≈ 22 万</td></tr>
+      <tr><td>主频</td><td class="num">3–5 GHz</td><td class="num">~1.4 GHz</td></tr>
+      <tr><td>FP32 峰值</td><td class="num">数 TFLOPS</td><td class="num">19.5 TFLOPS</td></tr>
+      <tr><td>访存带宽</td><td class="num">~100–400 GB/s</td><td class="num">1.5–2.0 TB/s</td></tr>
+      <tr><td>擅长</td><td>串行、分支多、依赖链长</td><td>大量独立、相同的计算</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p style="font-size:14px;color:var(--mute)">A100 数字来自 NVIDIA 公开规格；你用的卡请以 prob 0.2 的 device query 结果为准，并按 handout 的要求把型号和 compute capability 一起记下。</p>
+  <div class="tldr">CPU 把晶体管花在“让一个人跑得快”，GPU 花在“让很多人一起跑”。这是设计取舍，不是谁的工艺更先进。</div>
+</section>
+
+<section class="sec" id="s112b">
+  <h3><span class="n">深入</span>延迟与吞吐：本章最重要的一对概念</h3>
+  <p>Guide 1.1 其实没有出现 “latency” 这个词，它说的是“单线程性能 vs 总吞吐”。但讲座和作业都用“延迟/吞吐”来表述，二者是一回事。这里把它彻底讲清楚。</p>
+
+  <div class="analogy"><strong>类比：跑车和大巴。</strong>要把 400 人从北大送到清华。跑车 5 分钟一趟、一次 2 人；大巴 15 分钟一趟、一次 50 人。跑车每一趟的延迟低，大巴每趟延迟高，但大巴的吞吐（人/分钟）高得多。CPU 是跑车，GPU 是一个大巴车队。</div>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 660 250" role="img" aria-label="时间轴：CPU 逐个快速完成任务，GPU 每个任务慢但大量并行">
+      <text x="20" y="22" class="lbl t-cpu" style="font-weight:700">CPU：每个任务 1 格，一次做 1 个</text>
+      <g id="cpuTL"></g>
+      <text x="20" y="96" class="lbl t-gpu" style="font-weight:700">GPU：每个任务 4 格，但一次做 8 个</text>
+      <g id="gpuTL"></g>
+      <line x1="20" y1="226" x2="640" y2="226" class="ln"/>
+      <text x="20" y="244" class="sm">时间 →</text>
+      <text x="640" y="244" text-anchor="end" class="sm">16 格内：CPU 完成 16 个，GPU 完成 32 个</text>
+    </svg>
+    </div>
+    <figcaption><b>图 3</b>GPU 上单个任务更慢（延迟高），但单位时间完成的任务更多（吞吐高）。真实 GPU 的并行宽度是几万而不是 8。</figcaption>
+  </figure>
+
+  <h4>“TFLOPS”是一个吞吐数字</h4>
+  <p>标称的 TFLOPS 是 <span class="mono">（计算单元个数）×（每单元每周期运算数）×（主频）</span> 乘出来的总量。它描述“所有单元都在忙时，每秒一共做多少次运算”。它<strong>不</strong>告诉你某一次运算从发出到出结果要多久。一条 GPU 指令的延迟是若干个时钟周期，而 GPU 的时钟比 CPU 慢。</p>
+  <pre><span class="c">// A100 FP32 峰值的来历（粗算）</span>
+108 SM × 64 FP32 单元/SM × 2 FLOP/周期(FMA) × 1.41 GHz
+  ≈ <span class="k">19.5 TFLOPS</span>      <span class="c">// 前提：几千个单元每个周期都有活干</span></pre>
+
+  <h4>“高带宽”也是吞吐</h4>
+  <p>HBM 的 TB/s 级带宽，是在大块、连续、对齐的访问下测出的。每次读显存的延迟依然是几百纳秒量级。带宽能跑满，靠的是同时在路上的请求足够多，并且每次请求搬的都是有用的连续字节。Module 4 会用 <code>05_bandwidth.cu</code> 让你亲手测这个。</p>
+
+  <h4>吞吐需要“足够多互不依赖的工作”</h4>
+  <p>GPU 掩盖延迟的手段是：一个 warp 在等内存时，硬件立刻切到另一个准备好的 warp 去算。这要求手头始终有很多个<strong>可以同时做</strong>的任务。</p>
+  <p>用一个十行的 Python 玩具模型感受一下。它不是 GPU 的真实行为，只是把“延迟高但并行宽”这件事算给你看：</p>
+<pre><span class="c"># 玩具模型：n 个互不依赖的任务</span>
+<span class="k">def</span> <span class="p">finish_time</span>(n, latency, width):
+    <span class="s">"""每个任务耗时 latency，机器一次能同时做 width 个"""</span>
+    rounds = -(-n // width)          <span class="c"># 要分几轮做完</span>
+    <span class="k">return</span> rounds * latency
+
+n = 1_000_000
+<span class="k">print</span>(<span class="s">"CPU"</span>, finish_time(n, latency=1,  width=16))     <span class="c"># 62500</span>
+<span class="k">print</span>(<span class="s">"GPU"</span>, finish_time(n, latency=20, width=50_000)) <span class="c"># 400</span>
+<span class="k">print</span>(<span class="s">"GPU, n=1"</span>, finish_time(1, latency=20, width=50_000)) <span class="c"># 20，比 CPU 的 1 慢</span></pre>
+  <p>同一台“GPU”，任务多时快 150 倍，只有一个任务时反而慢 20 倍。作业 prob 1.5 里 <code>&lt;&lt;&lt;1,1&gt;&gt;&gt;</code> 那一行，你会在真机上看到同样的现象。</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 660 200" role="img" aria-label="依赖图：串行链只有宽度 1，宽依赖图可以并行">
+      <text x="20" y="22" class="lbl" style="font-weight:700">串行依赖链（宽度 = 1）</text>
+      <g id="chain"></g>
+      <text x="360" y="22" class="lbl" style="font-weight:700">宽依赖图（宽度 = 6）</text>
+      <g id="wide"></g>
+    </svg>
+    </div>
+    <figcaption><b>图 4</b>左：每一步都要等上一步的结果，任意时刻只有 1 个任务能做。右：同一层的 6 个任务互不依赖，可以同时做。决定能否用上 GPU 吞吐的，是这张图有多“宽”，而不是节点总数。</figcaption>
+  </figure>
+  <div class="box key"><span class="tag">判断一个任务适不适合 GPU</span>
+    <p>先问：<strong>同一时刻有多少件互不依赖的事？</strong>如果答案是几万、几百万，GPU 能发挥。如果每一步都卡在上一步，上面玩具模型里的 <code>width</code> 实际上就退化成了 1。剩下的你可以在 prob 1.2 里自己推。</p>
+    <p>这个思路和 Amdahl 定律同源：程序里串行的部分，决定了加速比的上限。</p>
+  </div>
+  <div class="tldr">先看宽度，再看总量。TFLOPS 和 TB/s 都是“所有人都在忙”时的上限，前提是有足够多的独立活给他们干。</div>
+</section>
+
+<section class="sec" id="s113">
+  <h3><span class="n">1.1.3</span>快速上手：不一定要手写 kernel</h3>
+  <p>Guide 提醒：很多时候你不需要从头写 CUDA C++。按抽象层次从高到低：</p>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>层次</th><th>例子</th><th>你写什么</th></tr></thead>
+    <tbody>
+      <tr><td>AI 框架</td><td>PyTorch、JAX</td><td><code>y = x @ w</code>，框架去调 GPU</td></tr>
+      <tr><td>加速库</td><td>cuBLAS、cuDNN、cuFFT、CUTLASS</td><td>调用库函数</td></tr>
+      <tr><td>领域语言 DSL</td><td>Triton、TileLang、Warp</td><td>以 tile 为单位写 kernel（作业 Module 7）</td></tr>
+      <tr><td>CUDA C++</td><td><code>__global__</code> 函数</td><td>以线程为单位写 kernel（作业 Module 2–5）</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>这个训练营从最底层的 CUDA C++ 学起，是为了让你理解上面每一层背后硬件在做什么。</p>
+</section>
+
+<!-- ============ PART 1.2 ============ -->
+<div class="part">
+  <div class="part-head"><span class="num">1.2</span><h2>编程模型：线程怎么组织，数据放在哪</h2><span class="en">PROGRAMMING MODEL</span></div>
+</div>
+
+<section class="sec" id="s121">
+  <h3><span class="n">1.2.1</span>异构系统：CPU 是指挥，GPU 是工厂</h3>
+  <div class="story"><b>CPU 是项目经理，GPU 是外包工厂。</b>经理在办公室（host）写好图纸、把原材料用卡车（PCIe）运到工厂仓库（显存），一声令下开工，然后可以先去忙别的，最后再把成品运回来。卡车很慢，所以聪明的经理尽量少跑几趟。</div>
+  <p>CUDA 假设机器里同时有 CPU 和 GPU。两边各有自己的内存：</p>
+  <ul class="tight">
+    <li><strong class="cpu">host（主机）</strong>= CPU + 它直连的内存（host memory）</li>
+    <li><strong class="gpu">device（设备）</strong>= GPU + 它直连的显存（device memory）</li>
+  </ul>
+  <p>程序总是从 CPU 上的 <code>main</code> 开始。CPU 负责准备数据、把数据拷到 GPU、<strong>启动（launch）</strong>kernel、等结果、把结果拷回来。</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 660 230" role="img" aria-label="异构系统：host 与 device 通过 PCIe 或 NVLink 相连，典型的五步流程">
+      <rect x="20" y="30" width="230" height="120" rx="5" class="b-cpu"/>
+      <text x="135" y="56" text-anchor="middle" class="lbl t-cpu" style="font-weight:700">HOST</text>
+      <rect x="40" y="70" width="190" height="30" class="b-mute"/><text x="135" y="90" text-anchor="middle" class="sm" style="fill:var(--fg)">CPU · 运行 host code</text>
+      <rect x="40" y="108" width="190" height="30" class="b-mute"/><text x="135" y="128" text-anchor="middle" class="sm" style="fill:var(--fg)">host memory（内存）</text>
+      <rect x="410" y="30" width="230" height="120" rx="5" class="b-gpu"/>
+      <text x="525" y="56" text-anchor="middle" class="lbl t-gpu" style="font-weight:700">DEVICE</text>
+      <rect x="430" y="70" width="190" height="30" class="b-mute"/><text x="525" y="90" text-anchor="middle" class="sm" style="fill:var(--fg)">GPU · 运行 device code（kernel）</text>
+      <rect x="430" y="108" width="190" height="30" class="b-mute"/><text x="525" y="128" text-anchor="middle" class="sm" style="fill:var(--fg)">device memory（显存）</text>
+      <line x1="250" y1="90" x2="410" y2="90" class="ln" style="stroke-width:5;stroke:var(--rule)"/>
+      <text x="330" y="80" text-anchor="middle" class="sm">PCIe / NVLink</text>
+      <text x="330" y="110" text-anchor="middle" class="sm">比显存带宽慢得多</text>
+      <g class="sm" style="font-size:12px">
+        <text x="20" y="182" class="lbl">① 分配内存/显存</text>
+        <text x="175" y="182" class="lbl">② 拷数据 H→D</text>
+        <text x="318" y="182" class="lbl t-gpu">③ 启动 kernel</text>
+        <text x="455" y="182" class="lbl">④ 等待完成</text>
+        <text x="560" y="182" class="lbl">⑤ 拷回 D→H</text>
+      </g>
+      <line x1="20" y1="196" x2="640" y2="196" class="ln dash"/>
+      <text x="20" y="218" class="sm">CPU 和 GPU 可以同时干活：kernel 启动后 CPU 不必闲等，Guide 建议让两边都保持忙碌。</text>
+    </svg>
+    </div>
+    <figcaption><b>图 5</b>异构系统的基本流程。作业 <code>m2_first_kernel/01_vector_add.cu</code> 就是这五步的一个完整实例。</figcaption>
+  </figure>
+  <dl class="gloss">
+    <dt>device code</dt><dd>在 GPU 上运行的代码。</dd>
+    <dt>kernel</dt><dd>从 host 启动、在 device 上运行的函数。CUDA C++ 里用 <code>__global__</code> 标记。</dd>
+    <dt>launch</dt><dd>启动 kernel。一次 launch 会创建<strong>很多线程</strong>，它们都执行这同一个函数。</dd>
+  </dl>
+  <p>思维上最关键的一步转换：CPU 程序写的是“一个循环做 n 次”，GPU kernel 写的是“我是第几号工人，我只做我那一份”。</p>
+<pre><span class="c"># CPU 思维：一个人做完所有</span>
+<span class="k">for</span> i <span class="k">in</span> range(n):
+    c[i] = a[i] + b[i]
+
+<span class="c"># GPU 思维：把循环体拿出来，变成“每个工人的工作说明书”</span>
+<span class="k">def</span> <span class="p">kernel</span>(my_id):               <span class="c"># my_id 由硬件告诉你，不用自己循环</span>
+    c[my_id] = a[my_id] + b[my_id]
+<span class="c"># 然后一次性叫来 n 个工人，同时执行 kernel</span></pre>
+  <p>真实的 CUDA C++ 里，<code>my_id</code> 要由几个内置变量拼出来，还要处理“工人比活多”的情况。这正是 prob 2.1 的几个空，留给你自己填。</p>
+</section>
+
+<section class="sec" id="s122">
+  <h3><span class="n">1.2.2</span>GPU 硬件模型：一堆 SM</h3>
+  <p>对写程序来说，一块 GPU 可以看成一堆 <strong>SM（Streaming Multiprocessor，流式多处理器）</strong>，SM 再分组成 <strong>GPC（Graphics Processing Cluster）</strong>。SM 是你最需要记住的硬件单位：</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 660 290" role="img" aria-label="GPU 由多个 GPC 组成，每个 GPC 含多个 SM；SM 内部有寄存器堆、统一数据缓存和计算单元">
+      <rect x="10" y="10" width="360" height="270" rx="5" class="b-mute"/>
+      <text x="22" y="32" class="lbl" style="font-weight:700">GPU</text>
+      <g id="gpcs"></g>
+      <rect x="22" y="246" width="336" height="24" class="b-mem"/><text x="190" y="262" text-anchor="middle" class="sm" style="fill:var(--fg)">L2 缓存（所有 SM 共享）→ 显存</text>
+      <!-- zoom -->
+      <line x1="140" y1="72" x2="400" y2="20" class="ln dash"/>
+      <line x1="140" y1="100" x2="400" y2="280" class="ln dash"/>
+      <rect x="400" y="20" width="250" height="260" rx="5" class="b-gpu"/>
+      <text x="414" y="44" class="lbl t-gpu" style="font-weight:700">一个 SM 的内部</text>
+      <rect x="414" y="58" width="222" height="70" class="b-mute"/>
+      <text x="525" y="78" text-anchor="middle" class="sm" style="fill:var(--fg)">计算单元（FP32/INT/Tensor Core…）</text>
+      <g id="smalus"></g>
+      <rect x="414" y="138" width="222" height="44" class="b-gpu"/>
+      <text x="525" y="158" text-anchor="middle" class="lbl">寄存器堆 Register File</text>
+      <text x="525" y="174" text-anchor="middle" class="sm">如 64K 个 32-bit 寄存器</text>
+      <rect x="414" y="192" width="222" height="44" class="b-mem"/>
+      <text x="525" y="212" text-anchor="middle" class="lbl">统一数据缓存</text>
+      <text x="525" y="228" text-anchor="middle" class="sm">= shared memory + L1，比例可配</text>
+      <rect x="414" y="246" width="222" height="24" class="b-mute"/>
+      <text x="525" y="262" text-anchor="middle" class="sm" style="fill:var(--fg)">warp 调度器 · constant cache</text>
+    </svg>
+    </div>
+    <figcaption><b>图 6</b>GPU → GPC → SM。不同型号的 SM 数量、物理布局不同，但 Guide 强调：<strong>这些差异不影响 CUDA 程序的正确性</strong>，只影响性能。</figcaption>
+  </figure>
+</section>
+
+<section class="sec" id="s1221">
+  <h3><span class="n">1.2.2.1</span>Thread、Block、Grid：三层线程组织</h3>
+  <p>一次 launch 创建的线程不是一盘散沙，而是分成两层：</p>
+  <ul class="tight">
+    <li>若干 <strong>thread</strong> 组成一个 <strong>thread block</strong>（也叫 CTA）。</li>
+    <li>若干 block 组成一个 <strong>grid</strong>。同一个 grid 里所有 block 形状相同。</li>
+    <li>block 和 grid 都可以是 1D、2D 或 3D，方便对应向量、图像、体数据。</li>
+  </ul>
+  <div class="story"><b>学校类比。</b>thread 是学生，block 是一个班，grid 是整个年级，SM 是教室。全年级几千个班，教室只有一百多间：哪个班先进教室上课、哪个班后上，教务处随便排，你没法指定。</div>
+  <p>launch 时你通过 <strong>execution configuration</strong>（执行配置）告诉 GPU：grid 多大、每个 block 多大。CUDA C++ 里的具体写法见 Guide 2.1，作业 prob 2.1 会让你亲手写。</p>
+  <p>每个线程靠内置变量知道“我是谁”：<code>blockIdx</code>（我在第几个班）、<code>threadIdx</code>（我在班里第几号）、<code>blockDim</code> / <code>gridDim</code>（班有多大、年级有多少班）。由这些量可以拼出全局唯一的学号，每个线程据此去处理不同的数据。</p>
+  <p>下面这段 Python 就是 launch 的“心智模拟器”。注意 <code>shuffle</code> 那一行，它就是规则 2：</p>
+<pre><span class="k">import</span> random
+
+<span class="k">def</span> <span class="p">launch</span>(kernel, grid, block):
+    blocks = list(range(grid))
+    random.shuffle(blocks)            <span class="c"># block 顺序：没有任何保证！</span>
+    <span class="k">for</span> b <span class="k">in</span> blocks:                  <span class="c"># 真机上很多 block 同时在不同 SM 上跑</span>
+        <span class="k">for</span> t <span class="k">in</span> range(block):         <span class="c"># 同一个 block 的线程在同一个 SM 上</span>
+            kernel(blockIdx=b, threadIdx=t)
+
+<span class="k">def</span> <span class="p">hello</span>(blockIdx, threadIdx):
+    <span class="k">if</span> threadIdx == 0:
+        <span class="k">print</span>(<span class="s">f"hello from block {blockIdx}"</span>)
+
+launch(hello, grid=4, block=8)      <span class="c"># 每次运行输出顺序都可能不同</span></pre>
+  <p>跑几次，再对照 prob 0.1 在真 GPU 上的输出。两者都乱序，原因是同一条规则。</p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 660 270" role="img" aria-label="grid 由 block 组成，block 被调度到任意空闲 SM，顺序不保证">
+      <text x="20" y="22" class="lbl" style="font-weight:700">Grid（8 个 block）</text>
+      <g id="gridBlocks"></g>
+      <text x="20" y="150" class="sm">每个 block 内部：若干 thread（这里画 8 个）</text>
+      <text x="400" y="22" class="lbl" style="font-weight:700">分配到 SM（只有 3 个）</text>
+      <g id="smSlots"></g>
+      <path d="M 340 80 C 370 80, 370 60, 400 60" class="ln-gpu"/>
+      <text x="400" y="248" class="sm">执行顺序任意、可能并行也可能串行</text>
+    </svg>
+    </div>
+    <figcaption><b>图 7</b>grid 里的 block 可能有几百万个，而 SM 只有几十到一百多个。硬件把 block 分配给有空位的 SM，跑完一个再塞下一个。</figcaption>
+  </figure>
+
+  <h4>两条必须记住的规则</h4>
+  <div class="box key"><span class="tag">规则 1 · block 是“整体搬家”的</span>
+    <p>一个 block 里的所有线程<strong>一定在同一个 SM 上</strong>运行。所以它们能通过 SM 上的 shared memory 交换数据、互相同步。</p>
+  </div>
+  <div class="box trap"><span class="tag">规则 2 · block 之间没有顺序保证</span>
+    <p>block 之间<strong>没有任何调度保证</strong>。block 7 可能比 block 0 先跑，也可能同时跑。所以你的程序必须在“block 以任意顺序、并行或串行执行”时都正确。不要让一个 block 等另一个 block 的结果。</p>
+    <p>这条规则也是 CUDA 程序能在 SM 数量不同的卡上不改代码就运行的原因。作业 0.1 让你多跑几次 hello，输出顺序变化就是它的直接体现。</p>
+  </div>
+
+  <div class="tldr">班内可以说悄悄话（shared memory）、可以喊“都等一下”（同步）；班与班之间别互相等，因为你不知道对方什么时候上课。</div>
+  <h4 id="s12211">1.2.2.1.1 Thread Block Cluster（选读）</h4>
+  <p>从 compute capability 9.0（Hopper）开始，block 之上可以再加一层可选的 <strong>cluster</strong>。一个 cluster 里的 block 会被同时放到同一个 GPC 上，可以互相同步，还能读写彼此的 shared memory（称为 distributed shared memory）。cluster 不改变 grid 的大小和 block 编号。初学阶段知道有这一层即可。</p>
+</section>
+
+<section class="sec" id="s1222">
+  <h3><span class="n">1.2.2.2</span>Warp 与 SIMT：硬件真正执行的单位</h3>
+  <div class="story"><b>阅兵方阵。</b>一个方阵 32 人，教官只喊一个口令，32 人同时出左脚。要是口令是“学号单数的向左转”，那双数同学只能原地站着等，等单数做完，再喊“双数的向右转”。同一时间只有一半人在动，这就是 divergence 的代价。</div>
+  <p>你按 block 组织线程，但 SM 执行时会把 block 里的线程<strong>每 32 个切成一组</strong>，叫做 <strong>warp</strong>。warp 内的 32 个线程叫 lane，编号 0–31。一个 warp 共享一套取指和译码：同一时刻，它们执行同一条指令，只是作用在各自的数据上。</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 660 130" role="img" aria-label="一个 100 线程的 block 切成 4 个 warp，最后一个 warp 只有 4 个有效 lane">
+      <text x="20" y="22" class="lbl">blockDim = 100 → 切成 ⌈100/32⌉ = 4 个 warp</text>
+      <g id="warpSplit"></g>
+      <text x="20" y="118" class="sm">第 4 个 warp 只有 4 个 lane 在干活，另外 28 个空转。所以 block 大小最好是 32 的倍数。</text>
+    </svg>
+    </div>
+    <figcaption><b>图 8</b>block 被按顺序切成 warp。青色是有效 lane，灰色是浪费的 lane。</figcaption>
+  </figure>
+
+  <h4>SIMT 是什么</h4>
+  <p><strong>SIMT = Single Instruction, Multiple Threads</strong>。从程序员视角看，你写的是<strong>一个线程</strong>的代码，每个线程有自己的变量、可以走自己的分支。从硬件视角看，32 个线程一起执行。两者之间的差距，在遇到分支时显现：</p>
+  <pre><span class="k">if</span> (threadIdx.x % 2 == 0)  { A(); }   <span class="c">// 偶数 lane 走这边</span>
+<span class="k">else</span>                        { B(); }   <span class="c">// 奇数 lane 走那边</span></pre>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 660 200" role="img" aria-label="warp divergence：先执行 A 时奇数 lane 被屏蔽，再执行 B 时偶数 lane 被屏蔽">
+      <text x="20" y="20" class="sm">lane →  0 … 31（为了画得下，只画 16 个）</text>
+      <text x="20" y="54" class="lbl">时刻 1：执行 A()</text>
+      <g id="divA"></g>
+      <text x="20" y="104" class="lbl">时刻 2：执行 B()</text>
+      <g id="divB"></g>
+      <text x="20" y="154" class="lbl">时刻 3：汇合</text>
+      <g id="divC"></g>
+      <text x="20" y="192" class="sm">橙红 = 被 mask 掉、这一刻空转的 lane</text>
+    </svg>
+    </div>
+    <figcaption><b>图 9</b>warp divergence：一个 warp 内的线程走了不同分支时，硬件<strong>依次</strong>执行每条路径，不在当前路径上的 lane 被屏蔽（mask off）。两条路径都要花时间，利用率下降。</figcaption>
+  </figure>
+
+  <h4>SIMT 和 SIMD 不一样在哪</h4>
+  <p>CPU 上的 SIMD（如 AVX）是一条指令处理一个固定宽度的向量寄存器，比如 8 个 float。Guide 指出两者的区别：</p>
+  <div class="tbl">
+  <table>
+    <thead><tr><th></th><th>SIMD（CPU 向量指令）</th><th>SIMT（GPU warp）</th></tr></thead>
+    <tbody>
+      <tr><td>你写的是</td><td>对向量的操作</td><td>单个线程的标量代码</td></tr>
+      <tr><td>控制流</td><td>整条向量只有一个控制流，分支要自己用 mask 处理</td><td>每个线程可以有自己的控制流，硬件负责 mask</td></tr>
+      <tr><td>数据宽度</td><td>指令里写死（如 256-bit）</td><td>不在指令里体现</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="box trap"><span class="tag">Guide 的警告</span>
+    <p>不要依赖“warp 内线程一定步调一致（lockstep）”这种硬件细节。违反 SIMT 模型的写法属于未定义行为，在不同架构上表现可能不同。Volta 之后每个线程有独立的 program counter，这个变化具体意味着什么，是作业 prob 1.4 让你思考的。</p>
+  </div>
+  <div class="tldr">你写的是一个线程的代码，硬件按 32 人一组执行。让同一个 warp 里的线程尽量走同一条路；block 大小取 32 的倍数。</div>
+</section>
+
+<section class="sec" id="s1223">
+  <h3><span class="n">1.2.2.3</span>Tile 编程：另一种视角</h3>
+  <p>SIMT 让你从“一个线程”的角度写代码。新版 Guide 介绍了第二种模型：<strong>tile 编程</strong>。你从“一整个 block”的角度写代码，操作的对象是一块多维数据（tile），比如 64×64 的矩阵块。</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 660 210" role="img" aria-label="SIMT 视角每个线程处理一个元素；tile 视角一个 block 处理一个 tile">
+      <text x="20" y="22" class="lbl t-gpu" style="font-weight:700">SIMT：我是一个线程，我管一个元素</text>
+      <g id="simtGrid"></g>
+      <text x="360" y="22" class="lbl t-mem" style="font-weight:700">Tile：我是一个 block，我管一块</text>
+      <g id="tileGrid"></g>
+      <text x="20" y="200" class="sm">同一个 8×8 数组：左边 64 个线程各取 1 格；右边切成 4 个 4×4 tile，每个 block 处理一块，块内线程分工由编译器决定。</text>
+    </svg>
+    </div>
+    <figcaption><b>图 10</b>两种视角。tile 模型中 block 是执行单位，tile 是数据单位，一个 block 可以依次处理多个 tile。</figcaption>
+  </figure>
+  <ul class="tight">
+    <li>你只指定 grid 大小；每个 block 用多少线程由<strong>编译器</strong>根据 tile 操作决定。</li>
+    <li>tile 块只有一条控制流，所以<strong>没有 warp divergence</strong> 这回事。</li>
+    <li><strong>array</strong> 是放在显存里、可修改的多维数据；<strong>tile</strong> 是 block 内部的不可变值，编译器决定它放在寄存器、shared memory 还是别处。tile 的每一维都必须是 2 的幂、编译期已知。</li>
+    <li>内置操作包括逐元素运算、矩阵乘、按轴归约（sum/max）、reshape/transpose、类型转换；形状不同的 tile 运算时会广播。</li>
+    <li>tile 不取代 SIMT。两者可以在同一程序里共存，按 kernel 选择；需要精细控制每个线程时仍然用 SIMT。</li>
+  </ul>
+  <p>作业 Module 6、7 里的 Triton 和 TileLang 就是这种思路。用 NumPy 打个比方，差别一眼就能看出来：</p>
+<pre><span class="c"># SIMT 视角：我是一个线程，只管一个元素（循环由硬件“展开”成很多线程）</span>
+<span class="k">def</span> <span class="p">simt_kernel</span>(i):
+    y[i] = x[i] * 2 + 1
+
+<span class="c"># Tile 视角：我是一个 block，一口吃下一整块</span>
+<span class="k">def</span> <span class="p">tile_kernel</span>(block_id, TILE=64):
+    s = block_id * TILE
+    t = x[s:s+TILE]                  <span class="c"># load 一个 tile</span>
+    y[s:s+TILE] = t * 2 + 1          <span class="c"># 整块运算，线程怎么分工交给编译器</span></pre>
+  <div class="tldr">SIMT：我是一个人。Tile：我是一个班，拿一整块数据一起处理。AI 写 Triton/TileLang 时，你脑子里要切换到第二种视角。</div>
+</section>
+
+<section class="sec" id="s123">
+  <h3><span class="n">1.2.3</span>GPU 存储：数据住在哪里</h3>
+  <div class="story"><b>写作业时，资料放在哪？</b>口袋里的小抄（寄存器）伸手就拿，但只有你自己能看；课桌上摊开的书（shared memory）同桌都能看；楼下图书馆（L2、显存）什么都有，但要走一趟；城另一头的档案馆（host memory）得坐车去。厉害的人会提前把要用的书搬上课桌。</div>
+  <p>写 GPU 程序，算力往往不是瓶颈，<strong>把数据搬到计算单元旁边</strong>才是。所以要清楚有哪些存储、谁能访问、离计算单元多远。</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 660 330" role="img" aria-label="存储层次：寄存器、shared memory 与 L1、L2、显存、主机内存，越往下越大越慢">
+      <g id="memPyr"></g>
+      <line x1="560" y1="40" x2="560" y2="300" class="ln"/>
+      <path d="M 554 290 L 560 302 L 566 290" class="ln"/>
+      <text x="575" y="60" class="sm">更快</text><text x="575" y="76" class="sm">更小</text>
+      <text x="575" y="276" class="sm">更慢</text><text x="575" y="292" class="sm">更大</text>
+    </svg>
+    </div>
+    <figcaption><b>图 11</b>从上到下：作用范围越来越大，容量越来越大，延迟越来越高。容量数字以 A100 为例，仅表示量级。</figcaption>
+  </figure>
+
+  <h4>1.2.3.1 DRAM：global memory 与 host memory</h4>
+  <p>GPU 的显存（DRAM），从 device code 的角度叫 <strong>global memory</strong>：这块 GPU 上所有 SM 都能访问。CPU 的内存叫 <strong>system / host memory</strong>。CPU 和 GPU 共享一个<strong>统一虚拟地址空间</strong>：每个地址都能判断它属于 CPU 还是哪块 GPU。但“地址能认出来”不等于“随便都能访问”，需要用 CUDA API 分配和拷贝。</p>
+
+  <h4>1.2.3.2 Locality Domain（选读）</h4>
+  <p>大型 GPU 内部可能分成几个 locality domain，每个 domain 有自己的一部分显存和 SM。把数据和处理它的 SM 放在同一 domain 更快。这只影响性能，不影响正确性，初学可以跳过。</p>
+
+  <h4>1.2.3.3 片上存储：寄存器与 shared memory</h4>
+  <p>每个 SM 上有两种程序员能直接用的片上存储：</p>
+  <div class="tbl">
+  <table>
+    <thead><tr><th></th><th class="gpu">寄存器 Register</th><th class="memc">Shared Memory</th></tr></thead>
+    <tbody>
+      <tr><td>谁能访问</td><td>只有线程自己</td><td>同一个 block（或 cluster）的所有线程</td></tr>
+      <tr><td>怎么分配</td><td>编译器自动分配给局部变量</td><td>程序员显式声明，<strong>按 block</strong> 分配</td></tr>
+      <tr><td>用途</td><td>线程私有的临时值</td><td>block 内线程交换数据、复用数据</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="box key"><span class="tag">资源是有限的，这决定了能塞几个 block</span>
+    <p>一个 block 能被放到 SM 上运行，前提是它要的资源装得下：</p>
+    <pre style="margin:8px 0">每线程寄存器数 × 每 block 线程数 ≤ SM 的寄存器堆
+每 block 的 shared memory     ≤ SM 可用的 shared memory</pre>
+    <p>装不下就启动不了，只能缩小 block。装得下的话，一个 SM 能同时驻留几个 block 也由这些量决定。Module 4 的 occupancy 题会让你手算，那时会用到 prob 0.2 填的表。</p>
+  </div>
+
+  <h4>1.2.3.3.1 缓存</h4>
+  <ul class="tight">
+    <li><strong>L1</strong>：每个 SM 一个，和 shared memory 共用那块统一数据缓存。</li>
+    <li><strong>L2</strong>：整块 GPU 共享，比 L1 大得多。</li>
+    <li><strong>constant cache</strong>：每个 SM 一个，缓存 kernel 执行期间不变的值，kernel 参数也可能放这里（Module 4 的 <code>02_constant_coeff.cu</code> 会用到）。</li>
+  </ul>
+  <div class="tldr">离计算越近越快、越小、共享范围越窄。优化 GPU 程序，大半功夫是在“让数据少走远路”。</div>
+</section>
+
+<section class="sec" id="s1234">
+  <h3><span class="n">1.2.3.4</span>Unified Memory：一个指针两边用</h3>
+  <p>没有 unified memory 时，CPU 只能读 host memory，kernel 只能读 device memory，数据必须显式来回拷贝（图 5 的 ② 和 ⑤）。</p>
+  <p><strong>Unified memory</strong> 让一次分配可以被 CPU 和 GPU 都访问，运行时或硬件会在需要时自动把数据迁移到正在用它的那一侧。代码写起来更省事，作业 <code>02_vector_add_um.cu</code> 就是这个版本。</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 660 150" role="img" aria-label="显式拷贝与 unified memory 的对比">
+      <text x="20" y="22" class="lbl" style="font-weight:700">显式拷贝</text>
+      <rect x="20" y="34" width="110" height="40" class="b-cpu"/><text x="75" y="59" text-anchor="middle" class="sm" style="fill:var(--fg)">h_x（host）</text>
+      <rect x="200" y="34" width="110" height="40" class="b-gpu"/><text x="255" y="59" text-anchor="middle" class="sm" style="fill:var(--fg)">d_x（device）</text>
+      <path d="M 130 48 L 200 48" class="ln-cpu"/><path d="M 192 44 L 200 48 L 192 52" class="ln-cpu"/>
+      <path d="M 200 62 L 130 62" class="ln-gpu"/><path d="M 138 58 L 130 62 L 138 66" class="ln-gpu"/>
+      <text x="165" y="96" text-anchor="middle" class="sm">两个指针，手动 memcpy</text>
+      <text x="360" y="22" class="lbl" style="font-weight:700">Unified memory</text>
+      <rect x="400" y="34" width="200" height="40" class="b-mem"/><text x="500" y="59" text-anchor="middle" class="sm" style="fill:var(--fg)">x（一个指针，两边都能用）</text>
+      <text x="500" y="96" text-anchor="middle" class="sm">按需自动迁移</text>
+      <text x="20" y="134" class="sm">注意：自动迁移不是免费的。性能仍取决于少迁移、并让数据靠近使用它的处理器。</text>
+    </svg>
+    </div>
+    <figcaption><b>图 12</b>Guide 还提到 mapped memory（GPU 通过 PCIe/NVLink 直接读 CPU 内存），它延迟更高、带宽更低，不能当作显存的高性能替代。</figcaption>
+  </figure>
+</section>
+
+<!-- ============ MAP ============ -->
+<section class="sec" id="map">
+  <h3><span class="n">总图</span>一页记住 1.2：软件层次 ↔ 硬件 ↔ 存储</h3>
+  <p>1.2 节的内容可以压成一张对照：每一层软件概念，都落在某个硬件单位上，也对应一种它能直接用的存储。</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 660 260" role="img" aria-label="软件层次 thread、warp、block、grid 对应硬件 lane、warp 调度、SM、整块 GPU">
+      <text x="90" y="24" text-anchor="middle" class="sm" style="letter-spacing:.1em">软件</text>
+      <text x="330" y="24" text-anchor="middle" class="sm" style="letter-spacing:.1em">硬件</text>
+      <text x="560" y="24" text-anchor="middle" class="sm" style="letter-spacing:.1em">存储</text>
+      <g id="mapRows"></g>
+    </svg>
+    </div>
+    <figcaption><b>图 13</b>左右两列之间的连线就是 1.2 的骨架。warp 这一行特意留空“存储”和“同步”，作业 prob 1.3 要你把这张表补全。</figcaption>
+  </figure>
+</section>
+
+<!-- ============ SELF ============ -->
+<section class="sec" id="self">
+  <h3><span class="n">自测</span>对照作业，用本书自己作答</h3>
+  <p>按仓库的 AI 使用政策，这里不给答案，只告诉你每道题该回到哪一节去想。做完可以拿你的答案来问 AI：“帮我 review，哪句理由不严谨？”</p>
+  <div class="box key"><span class="tag">Review AI 写的 kernel 时，先问这五句</span>
+    <p>① 这个任务够“宽”吗？（MM 2）② 有没有哪个 block 在等别的 block？（MM 3）③ 同一个 warp 里分支多不多？（MM 4）④ 数据从哪来，走了几趟远路？（MM 5）⑤ 报的速度是吞吐还是延迟？（MM 1）</p>
+  </div>
+  <div class="box self"><span class="tag">prob 1.1 · 判断对错</span>
+    <p>四个小题，每个都在考“这个数字/说法描述的是延迟还是吞吐”。逐句问自己：TFLOPS、TB/s、主频，各自是哪种量？回看 <a href="#s112b">延迟 vs 吞吐</a> 和 <a href="#s112">1.1.2</a>。</p>
+  </div>
+  <div class="box self"><span class="tag">prob 1.2 · “N 方过百万”</span>
+    <p>总计算量 10<sup>12</sup> 是吞吐视角下的数字。“严格在线”意味着依赖图长什么样？宽度是多少？总时间该怎么估？回看 <a href="#s112b">图 4</a>。</p>
+  </div>
+  <div class="box self"><span class="tag">prob 1.3 / 1.4 · 预告</span>
+    <p>1.3 的表对应 <a href="#map">图 13</a> 和 <a href="#s1221">1.2.2.1</a>、<a href="#s123">1.2.3</a>；1.4 对应 <a href="#s1222">1.2.2.2</a>。</p>
+  </div>
+  <div class="box read"><span class="tag">去读原文</span>
+    <p>CUDA Programming Guide：<a href="https://docs.nvidia.com/cuda/cuda-programming-guide/01-introduction/introduction.html">1.1 Introduction</a> · <a href="https://docs.nvidia.com/cuda/cuda-programming-guide/01-introduction/programming-model.html">1.2 Programming Model</a></p>
+    <p>LCPU 讲义 <a href="https://github.com/interestingLSY/CUDA-From-Correctness-To-Performance-Code/blob/master/lecture.md">CUDA From Correctness To Performance</a> Part 0</p>
+  </div>
+</section>
+
+<footer class="colophon">
+  依据 CUDA Programming Guide §1.1–1.2 与 assignment01 handout 整理，用作 Weiming HPC Training Camp × LCPU AI Infra Seminars Session 1 的读本。硬件数字以 A100 为例，仅表示量级。
+</footer>
+</main>
+</div>
+
+<script>
+(function(){
+  const NS="http://www.w3.org/2000/svg";
+  function el(tag,attrs,parent,text){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;parent.appendChild(e);return e;}
+  const $=id=>document.getElementById(id);
+
+  // Fig 2: GPU rows
+  (function(){const g=$("gpurows");if(!g)return;
+    for(let r=0;r<8;r++){const y=46+r*19.5;
+      el("rect",{x:360,y:y,width:14,height:15,class:"f-cpu",style:"opacity:.55"},g);
+      el("rect",{x:376,y:y,width:12,height:15,class:"b-mem"},g);
+      for(let c=0;c<20;c++) el("rect",{x:392+c*11.9,y:y,width:9.5,height:15,class:"f-gpu"},g);
+    }})();
+
+  // Fig 3: timelines
+  (function(){const c=$("cpuTL"),g=$("gpuTL");if(!c)return;const u=38.75,x0=20;
+    for(let i=0;i<16;i++){el("rect",{x:x0+i*u+1,y:36,width:u-2,height:30,class:"f-cpu",style:"opacity:"+(i%2?0.75:1)},c);}
+    el("text",{x:x0+u/2,y:56,"text-anchor":"middle",class:"sm t-ink",style:"font-weight:700"},c,"1");
+    for(let lane=0;lane<8;lane++){for(let b=0;b<4;b++){
+      el("rect",{x:x0+b*4*u+1,y:108+lane*14,width:4*u-2,height:11,class:"f-gpu",style:"opacity:"+(b%2?0.6:0.95)},g);}}
+  })();
+
+  // Fig 4: dependency graphs
+  (function(){const c=$("chain"),w=$("wide");if(!c)return;
+    for(let i=0;i<6;i++){const y=50+i*24;el("circle",{cx:120,cy:y,r:8,class:"b-cpu"},c);
+      if(i<5)el("line",{x1:120,y1:y+8,x2:120,y2:y+16,class:"ln-cpu"},c);}
+    el("text",{x:150,y:110,class:"sm"},c,"每层 1 个任务");
+    el("text",{x:150,y:126,class:"sm"},c,"只能一步接一步");
+    el("circle",{cx:500,cy:50,r:8,class:"b-gpu"},w);
+    for(let i=0;i<6;i++){const x=400+i*40;el("line",{x1:500,y1:58,x2:x,y2:102,class:"ln"},w);
+      el("circle",{cx:x,cy:110,r:8,class:"b-gpu"},w);el("line",{x1:x,y1:118,x2:500,y2:162,class:"ln"},w);}
+    el("circle",{cx:500,cy:170,r:8,class:"b-gpu"},w);
+    el("text",{x:610,y:114,class:"sm"},w,"←同时做");
+  })();
+
+  // Fig 6: GPCs and SMs
+  (function(){const g=$("gpcs");if(!g)return;
+    for(let p=0;p<4;p++){const gx=22+(p%2)*170,gy=44+Math.floor(p/2)*100;
+      el("rect",{x:gx,y:gy,width:162,height:92,rx:3,class:"b-mute"},g);
+      el("text",{x:gx+8,y:gy+16,class:"sm"},g,"GPC "+p);
+      for(let s=0;s<6;s++){const sx=gx+8+(s%3)*50,sy=gy+24+Math.floor(s/3)*33;
+        el("rect",{x:sx,y:sy,width:44,height:28,class:(p===0&&s===0)?"f-gpu":"b-gpu"},g);
+        el("text",{x:sx+22,y:sy+18,"text-anchor":"middle",class:"sm mono",style:(p===0&&s===0)?"fill:var(--ink);font-weight:700":"fill:var(--fg)"},g,"SM");}}
+    const a=$("smalus");for(let i=0;i<16;i++)el("rect",{x:422+i*13.3,y:90,width:10,height:28,class:"f-gpu"},a);
+  })();
+
+  // Fig 7: grid blocks to SMs
+  (function(){const g=$("gridBlocks"),s=$("smSlots");if(!g)return;
+    for(let b=0;b<8;b++){const x=20+(b%4)*80,y=34+Math.floor(b/4)*52;
+      el("rect",{x:x,y:y,width:72,height:44,rx:3,class:"b-gpu"},g);
+      el("text",{x:x+6,y:y+14,class:"sm mono"},g,"block "+b);
+      for(let t=0;t<8;t++)el("rect",{x:x+6+t*7.8,y:y+22,width:5.6,height:14,class:"f-gpu"},g);}
+    const order=[[3,0,6],[7,1],[2,5,4]];
+    for(let m=0;m<3;m++){const y=34+m*68;el("rect",{x:400,y:y,width:240,height:58,rx:4,class:"b-mute"},s);
+      el("text",{x:410,y:y+18,class:"sm"},s,"SM "+m);
+      order[m].forEach((b,i)=>{el("rect",{x:452+i*62,y:y+10,width:56,height:38,rx:3,class:i===0?"f-gpu":"b-gpu"},s);
+        el("text",{x:480+i*62,y:y+34,"text-anchor":"middle",class:"sm mono",style:i===0?"fill:var(--ink);font-weight:700":"fill:var(--fg)"},s,"b"+b);});}
+  })();
+
+  // Fig 8: warp split
+  (function(){const g=$("warpSplit");if(!g)return;
+    for(let w=0;w<4;w++){const x=20+w*158;el("text",{x:x,y:46,class:"sm mono"},g,"warp "+w);
+      for(let l=0;l<32;l++){const t=w*32+l;el("rect",{x:x+(l%16)*9.3,y:54+Math.floor(l/16)*14,width:7.5,height:11,class:t<100?"f-gpu":"f-rule"},g);}}
+  })();
+
+  // Fig 9: divergence
+  (function(){function row(id,y,fn){const g=$(id);for(let l=0;l<16;l++){const k=fn(l);
+      el("rect",{x:160+l*29,y:y,width:24,height:24,rx:2,class:k==="on"?"f-gpu":"b-warn"},g);
+      el("text",{x:172+l*29,y:y+16,"text-anchor":"middle",class:"sm mono",style:k==="on"?"fill:var(--ink)":"fill:var(--warn)"},g,k==="on"?(fn.lab||""):"·");}}
+    const a=l=>l%2===0?"on":"off";a.lab="A";
+    const b=l=>l%2===1?"on":"off";b.lab="B";
+    const c=()=> "on";c.lab="";
+    row("divA",38,a);row("divB",88,b);row("divC",138,c);
+  })();
+
+  // Fig 10: SIMT vs tile grids
+  (function(){const s=$("simtGrid"),t=$("tileGrid");if(!s)return;
+    for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+      el("rect",{x:60+c*20,y:34+r*20,width:17,height:17,class:"b-gpu"},s);
+      el("circle",{cx:68.5+c*20,cy:42.5+r*20,r:2.4,class:"f-gpu"},s);
+      const q=(r<4?0:2)+(c<4?0:1);
+      el("rect",{x:420+c*20,y:34+r*20,width:17,height:17,class:"b-mem",style:"opacity:"+(q%3===0?1:0.55)},t);}
+    [[0,0],[1,0],[0,1],[1,1]].forEach(([cx,ry],i)=>{el("rect",{x:418+cx*80,y:32+ry*80,width:80,height:80,class:"b-mute",style:"stroke:var(--mem);stroke-width:2;fill:none"},t);
+      el("text",{x:458+cx*80,y:78+ry*80,"text-anchor":"middle",class:"lbl mono",style:"font-weight:600"},t,"B"+i);});
+    el("text",{x:240,y:100,class:"sm"},s,"● = 1 个线程");
+  })();
+
+  // Fig 11: memory pyramid
+  (function(){const g=$("memPyr");if(!g)return;
+    const rows=[
+      ["寄存器","线程私有","256 KB / SM","b-gpu"],
+      ["Shared memory / L1","block 内共享","≤ 192 KB / SM","b-gpu"],
+      ["L2 缓存","整块 GPU 共享","40 MB","b-mem"],
+      ["Global memory（显存）","所有 SM，所有 kernel","40–80 GB","b-mem"],
+      ["Host memory（内存）","CPU；GPU 经 PCIe/NVLink","数百 GB","b-cpu"]];
+    rows.forEach((r,i)=>{const w=220+i*60,x=280-w/2,y=36+i*54;
+      el("rect",{x:x,y:y,width:w,height:44,rx:3,class:r[3]},g);
+      el("text",{x:280,y:y+19,"text-anchor":"middle",class:"lbl",style:"font-weight:700"},g,r[0]);
+      el("text",{x:280,y:y+36,"text-anchor":"middle",class:"sm"},g,r[1]+" · "+r[2]);});
+    el("text",{x:20,y:24,class:"sm"},g,"SM 片上");
+    el("line",{x1:20,y1:144,x2:520,y2:144,class:"ln dash"},g);
+    el("text",{x:20,y:160,class:"sm"},g,"片外 / 芯片级");
+  })();
+
+  // Fig 13: map rows
+  (function(){const g=$("mapRows");if(!g)return;
+    const rows=[["thread","一个 lane","寄存器"],["warp","32 lane 共用指令流","?"],["block / CTA","一个 SM","shared memory"],["grid","整块 GPU","global memory"]];
+    rows.forEach((r,i)=>{const y=40+i*54;
+      el("rect",{x:20,y:y,width:140,height:40,rx:3,class:"b-gpu"},g);
+      el("text",{x:90,y:y+25,"text-anchor":"middle",class:"lbl mono",style:"font-weight:600"},g,r[0]);
+      el("line",{x1:160,y1:y+20,x2:250,y2:y+20,class:"ln"},g);
+      el("rect",{x:250,y:y,width:160,height:40,rx:3,class:"b-mute"},g);
+      el("text",{x:330,y:y+25,"text-anchor":"middle",class:"lbl"},g,r[1]);
+      el("line",{x1:410,y1:y+20,x2:490,y2:y+20,class:"ln"},g);
+      const q=r[2]==="?";
+      el("rect",{x:490,y:y,width:150,height:40,rx:3,class:q?"b-warn":"b-mem"},g);
+      el("text",{x:565,y:y+25,"text-anchor":"middle",class:"lbl"+(q?" t-warn":"")},g,q?"留给 prob 1.3":r[2]);});
+  })();
+
+  // rail highlight
+  try{
+    const links=[...document.querySelectorAll(".rail a")];
+    const map=new Map(links.map(a=>[a.getAttribute("href").slice(1),a]));
+    const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.remove("on"));const a=map.get(e.target.id);if(a)a.classList.add("on");}})},{rootMargin:"-20% 0px -70% 0px"});
+    map.forEach((a,id)=>{const t=document.getElementById(id);if(t)io.observe(t);});
+  }catch(e){}
+})();
+</script>

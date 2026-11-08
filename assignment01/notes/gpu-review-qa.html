@@ -1,0 +1,508 @@
+<title>GPU 问答复习本</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;900&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: same dark reading column as the Guide 1.1–1.2 reader; one section per question, answer opens with the short conclusion. */
+:root{
+  color-scheme: dark;
+  --ink:#0e1218; --paper:#151b24; --rule:#273142; --fg:#dfe5ee; --mute:#8d98aa;
+  --cpu:#e8a54b; --gpu:#4fc3b4; --mem:#9b8cf0; --warn:#ef7a6b;
+  --gpu-soft:rgba(79,195,180,.12);
+  --f-display:"Noto Serif SC","Songti SC",serif;
+  --f-body:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{background:var(--ink);color:var(--fg);font-family:var(--f-body);font-size:16.5px;line-height:1.85;-webkit-font-smoothing:antialiased}
+a{color:var(--gpu);text-underline-offset:3px}
+a:focus-visible{outline:2px solid var(--cpu);outline-offset:3px;border-radius:2px}
+code{font-family:var(--f-mono);font-size:.88em;background:var(--paper);border:1px solid var(--rule);padding:.05em .38em;border-radius:4px;color:#f1d7a8}
+strong{color:#fff;font-weight:700}
+.shell{display:grid;grid-template-columns:230px minmax(0,1fr);gap:56px;max-width:1160px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 96px}
+@media (max-width:900px){.shell{grid-template-columns:minmax(0,1fr);gap:0}}
+.rail{position:sticky;top:env(safe-area-inset-top,0px);align-self:start;padding-top:48px;max-height:100vh;overflow:auto;font-size:13.5px;line-height:1.55}
+.rail h2{font-family:var(--f-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);font-weight:400;margin:0 0 10px}
+.rail ol{list-style:none;margin:0 0 22px;padding:0;display:grid;gap:2px}
+.rail a{display:grid;grid-template-columns:2.4em 1fr;gap:6px;color:var(--mute);text-decoration:none;padding:5px 8px;border-left:2px solid transparent}
+.rail a:hover{color:var(--fg);border-left-color:var(--rule)}
+.rail a.on{color:var(--fg);border-left-color:var(--gpu)}
+.rail a span:first-child{font-family:var(--f-mono);font-size:12px}
+@media (max-width:900px){.rail{display:none}}
+main{min-width:0;max-width:720px}
+.cover{padding-block:64px 28px;border-bottom:1px solid var(--rule)}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
+.cover h1{font-family:var(--f-display);font-weight:900;font-size:clamp(34px,6vw,54px);line-height:1.15;margin:14px 0 16px;text-wrap:balance}
+.cover p{font-size:16.5px;color:#c4ccd8;margin:8px 0}
+.part{margin-top:64px;font-family:var(--f-mono);font-size:12px;letter-spacing:.16em;color:var(--mute);text-transform:uppercase;border-bottom:1px solid var(--rule);padding-bottom:8px}
+section.q{margin-top:48px;scroll-margin-top:24px}
+section.q h2{font-family:var(--f-display);font-weight:600;font-size:23px;line-height:1.4;margin:0 0 10px;text-wrap:balance}
+section.q h2 .n{font-family:var(--f-mono);font-size:14px;font-weight:400;color:var(--gpu);margin-right:10px}
+.ans{background:var(--gpu-soft);border-left:3px solid var(--gpu);padding:10px 16px;margin:12px 0 18px;border-radius:0 6px 6px 0}
+.ans p{margin:4px 0}
+h3{font-size:16.5px;margin:26px 0 4px;color:#fff}
+p{margin:10px 0}
+ul.tight,ol.tight{margin:8px 0;padding-left:1.4em} .tight li{margin:3px 0}
+.tbl{overflow-x:auto;margin:16px 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:520px}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.06em;color:var(--mute);font-weight:400}
+td.num{font-variant-numeric:tabular-nums;font-family:var(--f-mono);font-size:13.5px;white-space:nowrap}
+pre{background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:14px 16px;overflow-x:auto;font-family:var(--f-mono);font-size:13px;line-height:1.6;margin:14px 0}
+pre .c{color:var(--mute)} pre .k{color:var(--gpu)} pre .w{color:var(--warn)}
+.src{font-size:13px;color:var(--mute)}
+.quote{border-left:3px solid var(--rule);padding:2px 0 2px 14px;color:#c9d0db;margin:14px 0}
+.refs{margin-top:72px;border-top:1px solid var(--rule);padding-top:16px;font-size:13.5px;color:var(--mute)}
+.refs ol{padding-left:1.4em} .refs li{margin:4px 0}
+</style>
+
+<div class="shell">
+<nav class="rail" aria-label="目录">
+  <h2>线程与调度</h2>
+  <ol>
+    <li><a href="#q1"><span>Q1</span><span>一个 SM 上有几个 warp</span></a></li>
+    <li><a href="#q2"><span>Q2</span><span>warp 是基本执行单位吗</span></a></li>
+    <li><a href="#q3"><span>Q3</span><span>什么是硬件线程</span></a></li>
+    <li><a href="#q4"><span>Q4</span><span>5 级流水线</span></a></li>
+    <li><a href="#q5"><span>Q5</span><span>OS 线程与流水线的关系</span></a></li>
+  </ol>
+  <h2>存储</h2>
+  <ol>
+    <li><a href="#q6"><span>Q6</span><span>global memory 在哪</span></a></li>
+    <li><a href="#q7"><span>Q7</span><span>shared、L1、L2 的延迟</span></a></li>
+    <li><a href="#q8"><span>Q8</span><span>怎样管理 shared memory</span></a></li>
+  </ol>
+  <h2>其他</h2>
+  <ol>
+    <li><a href="#data"><span>数据</span><span>本复习本的实测数据</span></a></li>
+    <li><a href="#refs"><span>出处</span><span>参考资料</span></a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="cover">
+  <div class="eyebrow">Session 1 · 配套读本的问答整理</div>
+  <h1>GPU 问答复习本</h1>
+  <p>这份复习本整理了阅读《GPU 从零读本 · 1.1–1.2》时提出的 8 个问题。每个问题先给结论，再给依据。</p>
+  <p>GPU 的数字以 A100 为例。CPU 的数字有两个来源：一部分是 AMD EPYC 7742 的公开规格，另一部分是在一台 Intel Xeon 2.30 GHz 云主机上的实测，这台机器没有 GPU。实测方法见<a href="#data">文末</a>。</p>
+</header>
+
+<div class="part">线程与调度</div>
+
+<!-- Q1 -->
+<section class="q" id="q1">
+  <h2><span class="n">Q1</span>一个 SM 上同时有几个 warp？其中几个在运行，几个在等待？</h2>
+  <div class="ans">
+    <p>A100 的一个 SM 最多驻留 64 个 warp。每个时钟周期最多有 4 个 warp 发出指令，其余的处于就绪或阻塞状态，比例由 kernel 决定。</p>
+  </div>
+  <h3>驻留上限</h3>
+  <p>每 SM 最多驻留的 warp 数 = 每 SM 最大驻留线程数 ÷ 32，具体数值取决于 compute capability（NVIDIA 给每代 GPU 架构编的版本号）。数据出自 Guide 附录 Compute Capabilities：</p>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>GPU</th><th>compute capability</th><th>最大驻留线程 / SM</th><th>最大驻留 warp / SM</th></tr></thead>
+    <tbody>
+      <tr><td>A100</td><td class="num">8.0</td><td class="num">2048</td><td class="num">64</td></tr>
+      <tr><td>RTX 30 / 40 系列</td><td class="num">8.6 / 8.9</td><td class="num">1536</td><td class="num">48</td></tr>
+      <tr><td>H100</td><td class="num">9.0</td><td class="num">2048</td><td class="num">64</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>你的卡：用作业 prob 0.2 测出的“最大常驻线程 / SM”除以 32。</p>
+  <h3>每个周期的三种状态</h3>
+  <p>A100 的每个 SM 分为 4 个分区，每个分区有 1 个 warp 调度器，最多驻留 16 个 warp。每个调度器每个周期最多为一个 warp 发出一条指令（出处：A100 架构白皮书）。在任一周期，驻留的 warp 处于以下三种状态之一：</p>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>状态</th><th>含义</th><th>A100 一个 SM 上的数量</th></tr></thead>
+    <tbody>
+      <tr><td>issued（发出指令）</td><td>本周期被调度器选中</td><td class="num">≤ 4</td></tr>
+      <tr><td>eligible（就绪）</td><td>下一条指令可以执行，但本周期没被选中</td><td>由程序决定</td></tr>
+      <tr><td>stalled（阻塞）</td><td>在等 global memory 读取返回、前一条指令的结果、<code>__syncthreads()</code> 等条件</td><td>由程序决定</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>“发出指令”和“正在执行”不是一回事。一个 warp 上个周期发出的访存指令还没返回时，这个周期另一个 warp 又可以发出指令，所以同时在流水线里执行的 warp 可以多于 4 个。</p>
+  <p>实测方法：运行 <code>ncu --section SchedulerStats ./程序</code>。这个命令会报告每个调度器平均的 Active Warps（驻留数）、Eligible Warps（就绪数）和 Issued Warp（每周期发出数）。如果 Eligible Warps 的平均值远低于 1，说明调度器经常在某些周期找不到可以发射的 warp，这些周期计算单元是空闲的。</p>
+  <h3>实际驻留数受 block 资源用量限制</h3>
+  <p>block 是整体分配到 SM 上的，所以实际驻留的 warp 数 = SM 能装下的 block 数 × 每个 block 的 warp 数。能装下几个 block，取决于以下三项中最紧的一项：</p>
+  <ul class="tight">
+    <li>寄存器：每线程寄存器数 × block 线程数，累加不能超过 SM 的 65,536 个。</li>
+    <li>shared memory：每个 block 的用量，累加不能超过 SM 可用的容量。</li>
+    <li>每 SM 最多驻留的 block 数：A100 为 32。</li>
+  </ul>
+  <p>下面是只受寄存器限制的 A100 例子，block 有 256 个线程（8 个 warp）：</p>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>每线程寄存器</th><th>每 block 需要</th><th>能装下的 block</th><th>驻留 warp</th></tr></thead>
+    <tbody>
+      <tr><td class="num">32</td><td class="num">256 × 32 = 8,192</td><td class="num">65,536 ÷ 8,192 = 8</td><td class="num">8 × 8 = 64（上限）</td></tr>
+      <tr><td class="num">64</td><td class="num">256 × 64 = 16,384</td><td class="num">4</td><td class="num">32（上限的一半）</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>实际驻留 warp 数与上限之比叫 <strong>occupancy</strong>。作业 prob 4.8 要求你用 shared memory 这一项限制在自己的卡上手算。</p>
+</section>
+
+<!-- Q2 -->
+<section class="q" id="q2">
+  <h2><span class="n">Q2</span>warp 是 SM 的基本执行单位吗？它和 OS 线程像吗？</h2>
+  <div class="ans">
+    <p>是的，warp 是 SM 调度和发射指令的单位。warp 和 OS 线程不像，它更接近 CPU 的 SMT 硬件线程（见 Q3）。</p>
+  </div>
+  <p>调度器每次选一个 warp，为它的 32 个线程发出同一条指令，被屏蔽的线程不执行这条指令。三个层级各有分工：</p>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>层级</th><th>是什么的单位</th></tr></thead>
+    <tbody>
+      <tr><td>thread</td><td>编程：kernel 代码按单个线程编写</td></tr>
+      <tr><td>warp</td><td>调度和发射指令</td></tr>
+      <tr><td>block</td><td>分配资源：寄存器和 shared memory 按 block 分配，block 中所有线程结束后才释放</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>warp 与 OS 线程的区别：</p>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>对比项</th><th>OS 线程在 CPU 上</th><th>warp 在 SM 上</th></tr></thead>
+    <tbody>
+      <tr><td>调度者</td><td>操作系统内核（软件）</td><td>warp 调度器（硬件）</td></tr>
+      <tr><td>切换粒度</td><td>时间片，毫秒级</td><td>每个时钟周期</td></tr>
+      <tr><td>切换开销</td><td>本机实测约 0.75 μs</td><td>零</td></tr>
+      <tr><td>何时离开处理器</td><td>时间片用完、阻塞或被抢占</td><td>一般驻留到所属 block 结束</td></tr>
+      <tr><td>一次调度执行几个线程</td><td>1</td><td>32（同一条指令）</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>warp 切换开销为零，是因为每个驻留 warp 的程序计数器和寄存器在它的整个生命周期里都保存在片上：</p>
+  <p class="quote">“The execution context … for each warp processed by a multiprocessor is maintained on-chip during the entire lifetime of the warp. Therefore, switching from one execution context to another has no cost.”<span class="src">CUDA C++ Programming Guide（旧版），Hardware Multithreading 一节</span></p>
+  <p>代价是驻留数有硬上限：OS 可以把线程上下文换到内存里，从而支持远多于核数的线程，SM 不这样做，所以驻留的 warp 数受寄存器堆和 shared memory 的容量限制（Q1）。</p>
+</section>
+
+<!-- Q3 -->
+<section class="q" id="q3">
+  <h2><span class="n">Q3</span>什么是硬件线程（SMT）？</h2>
+  <div class="ans">
+    <p>硬件线程是 CPU 核里一份由硬件保存的线程状态，即一个 PC 和一套寄存器。一个核保存多份状态，就能在每个周期从不同的指令流中挑指令执行，切换开销为零。这种设计叫 SMT（Simultaneous Multithreading），Intel 的 SMT 实现商品名叫 Hyper-Threading。</p>
+  </div>
+  <h3>1. 从 OS 线程说起</h3>
+  <p>OS 线程是软件概念。操作系统内核为每个线程保存一份状态：程序计数器（PC）、各寄存器的值、栈指针。</p>
+  <p>没有 SMT 的 CPU 核，任一时刻只装着一份这样的状态。线程数多于核数时，内核用时间片轮流运行这些线程，换线程的步骤是：</p>
+  <ol class="tight">
+    <li>把当前线程的寄存器存到内存；</li>
+    <li>从内存装入另一个线程的寄存器；</li>
+    <li>跳到新线程的 PC 继续执行。</li>
+  </ol>
+  <p>这叫上下文切换。在本复习本的实验机上实测，一次切换约 0.75 μs，按 2.3 GHz 标称频率约合 1,700 个周期。</p>
+  <h3>2. 问题：单个线程填不满核的执行单元</h3>
+  <p>一个核只执行一个线程时，经常有很多周期没有指令可以发射。在同一台实验机上测得两个典型原因：</p>
+  <ul class="tight">
+    <li><strong>依赖链</strong>：每条 double 加法都依赖上一条时，加法吞吐只有峰值的 25%（读本 §2，延迟 0.528 ns）。</li>
+    <li><strong>DRAM 访问</strong>：一次随机读 DRAM 平均要 142 ns，后续依赖这个数据的指令在此期间都不能发射。</li>
+  </ul>
+  <p>用 OS 上下文切换来填补这些空档不可行：一次切换 0.75 μs，是一次 DRAM 访问的 5.3 倍，是一次加法延迟的 1,400 倍。切换本身就比要填补的空档还长。</p>
+  <h3>3. SMT：在硬件里同时保存多份线程状态</h3>
+  <p>SMT 在一个核里放 2 份（或更多份）PC 和寄存器，执行单元、cache 等其余部分由这几份共用。每一份状态叫一个<strong>硬件线程</strong>，Intel 也称之为逻辑处理器（logical processor）。</p>
+  <p>核在每个周期可以从多个硬件线程中挑出可执行的指令来发射。一个线程在等 DRAM 时，另一个线程的指令可以使用空出来的执行单元。所有硬件线程的状态一直留在核里，切换不需要保存或恢复寄存器，开销为零。</p>
+  <h3>4. 操作系统看到的是硬件线程</h3>
+  <p>对操作系统来说，每个硬件线程都是一个独立的 CPU。Linux 的 <code>lscpu</code> 中：</p>
+  <ul class="tight">
+    <li><code>Thread(s) per core</code>：每核的硬件线程数。</li>
+    <li><code>CPU(s)</code>：插槽数 × 每插槽核数 × 每核硬件线程数，即操作系统可以调度的 CPU 个数。</li>
+  </ul>
+  <p>两个例子：</p>
+  <ul class="tight">
+    <li>EPYC 7742：64 核，每核 2 个硬件线程，<code>CPU(s)</code> 为 128。</li>
+    <li>本复习本的实验机：<code>lscpu</code> 显示 <code>Thread(s) per core: 1</code>，没有开启 SMT。</li>
+  </ul>
+  <h3>5. 两层调度</h3>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>层</th><th>把什么分配给什么</th><th>调度者</th><th>粒度</th></tr></thead>
+    <tbody>
+      <tr><td>第 1 层</td><td>软件线程（可有成千上万个）→ 硬件线程</td><td>操作系统内核</td><td>时间片，毫秒级</td></tr>
+      <tr><td>第 2 层</td><td>硬件线程 → 执行单元</td><td>核内硬件</td><td>每个时钟周期</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h3>6. 与 warp 对照</h3>
+  <p>GPU 的 SM 把第 2 层做得更宽：</p>
+  <div class="tbl">
+  <table>
+    <thead><tr><th></th><th>Intel 核（开启 SMT）</th><th>A100 的一个 SM 分区</th></tr></thead>
+    <tbody>
+      <tr><td>硬件中保存的线程状态</td><td>2 份</td><td>最多 16 个 warp</td></tr>
+      <tr><td>每份状态的指令流宽度</td><td>1 个线程</td><td>32 个线程（SIMT）</td></tr>
+      <tr><td>每周期发射</td><td>可同时发射两个硬件线程的指令</td><td>选 1 个 warp 发射 1 条指令</td></tr>
+      <tr><td>切换开销</td><td>零</td><td>零</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>为什么 GPU 要保存更多份状态？CPU 主要靠乱序执行和大容量 cache 减少等待，GPU 没有乱序执行，每个线程分到的 cache 也小得多：</p>
+  <ul class="tight">
+    <li>EPYC 7742：256 MB L3 ÷ 128 个硬件线程 = 每线程 2 MB。</li>
+    <li>A100：40 MB L2 ÷ 221,184 个驻留线程 = 每线程约 190 B。</li>
+  </ul>
+  <p>所以 GPU 主要靠在 warp 之间切换来掩盖延迟，需要的线程状态份数也就多得多。</p>
+</section>
+
+<!-- Q4 -->
+<section class="q" id="q4">
+  <h2><span class="n">Q4</span>5 级流水线的 IF、ID、EX、MEM、WB 是什么意思？</h2>
+  <div class="ans">
+    <p>这是计算机组成教材里经典的 5 级流水线：CPU 执行每条机器指令都依次经过这五个阶段。各阶段使用不同的硬件部件，所以多条指令可以错开一个阶段同时执行。</p>
+  </div>
+  <h3>一条指令的五个阶段</h3>
+  <p>以 RISC-V 指令 <code>add x3, x1, x2</code>（x3 = x1 + x2，x1、x2、x3 是寄存器）为例：</p>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>阶段</th><th>全称</th><th>做什么</th><th>对 add x3, x1, x2</th></tr></thead>
+    <tbody>
+      <tr><td>IF</td><td>Instruction Fetch</td><td>按 PC 地址从指令 cache 读出指令，PC 指向下一条</td><td>读出这条指令的编码</td></tr>
+      <tr><td>ID</td><td>Instruction Decode</td><td>解析操作类型和寄存器编号，从寄存器堆读出操作数</td><td>识别为加法，读出 x1、x2</td></tr>
+      <tr><td>EX</td><td>Execute</td><td>ALU 运算；load/store 在此计算地址</td><td>计算 x1 + x2</td></tr>
+      <tr><td>MEM</td><td>Memory Access</td><td>只有 load/store 读写数据内存</td><td>不做事</td></tr>
+      <tr><td>WB</td><td>Write Back</td><td>把结果写回寄存器堆</td><td>把和写入 x3</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h3>多条指令重叠执行</h3>
+<pre>时钟周期 →   1    2    3    4    5    6    7    8    9
+指令 1      IF   ID   EX   MEM  WB
+指令 2           IF   ID   EX   MEM  WB
+指令 3                IF   ID   EX   MEM  WB
+指令 4                     IF   ID   EX   MEM  WB
+指令 5                          IF   ID   EX   MEM  WB</pre>
+  <p>每条指令仍需 5 个周期完成，这是延迟。从第 5 个周期起每个周期完成 1 条，这是吞吐。</p>
+  <h3>数据冒险</h3>
+  <p>后一条指令要用前一条的结果时，叫数据冒险（data hazard）。下面按无转发（forwarding）、寄存器堆在同一周期先写后读的经典模型分析：</p>
+<pre>指令 1：add x3, x1, x2     <span class="c"># 写 x3</span>
+指令 2：add x5, x3, x4     <span class="c"># 读 x3</span>
+
+时钟周期 →   1    2    3    4    5    6    7    8
+指令 1      IF   ID   EX   MEM  WB
+指令 2           IF   <span class="w">--   --</span>   ID   EX   MEM  WB
+                      <span class="c">↑ 指令 2 的 ID 必须等到第 5 周期指令 1 写回 x3</span></pre>
+  <p>空转的两个周期叫 stall 或 bubble。实际 CPU 用转发把 EX 的结果直接送给下一条指令，可以减少等待，但通常不能完全消除。读本 §2 的 K = 1 实验就是这种情况：每条 <code>addsd</code> 都要等上一条的结果，测得的是延迟（0.528 ns），不是吞吐（0.132 ns）。</p>
+  <h3>用其他线程的指令填补空转</h3>
+  <p>如果硬件保存着多个线程的 PC 和寄存器，IF 可以轮流从各线程取指。设同一线程相邻两条指令的 IF 相隔 T 个周期：</p>
+  <ul class="tight">
+    <li>生产者在第 c 周期 IF，第 c+4 周期 WB；</li>
+    <li>消费者在第 c+T 周期 IF，第 c+T+1 周期 ID；</li>
+    <li>不空转的条件是 c+T+1 ≥ c+4，即 T ≥ 3。</li>
+  </ul>
+  <p>所以在这个模型下，3 个线程轮流取指就能完全消除空转：</p>
+<pre>时钟周期 →   1    2    3    4    5    6    7    8
+A 的指令 1  IF   ID   EX   MEM  WB
+B 的指令 1       IF   ID   EX   MEM  WB
+C 的指令 1            IF   ID   EX   MEM  WB
+A 的指令 2                 IF   ID   EX   MEM  WB
+                                <span class="c">↑ 第 5 周期 ID 读 x3，A1 同一周期先写入</span></pre>
+  <p>只有 2 个线程时 T = 2，A 的指令 2 仍要空转 1 个周期。不同线程的指令访问的是不同的寄存器，彼此没有依赖，所以可以互相填补。所需线程数 3 和读本 §2 中“所需独立操作数 = 延迟 ÷ 发射间隔”是同一个规律。</p>
+  <p>真实的 CPU 和 GPU 流水线远多于 5 级，还有乱序执行、多发射等机制。5 级模型用来理解原理。</p>
+</section>
+
+<!-- Q5 -->
+<section class="q" id="q5">
+  <h2><span class="n">Q5</span>OS 线程模型和 5 级流水线是什么关系？</h2>
+  <div class="ans">
+    <p>两者是上下层的关系，不是同一层的子流程。上下文切换的每一步都由一串机器指令组成，而每一条指令都要走一遍 IF→ID→EX→MEM→WB。两个模型的交汇点是 PC 和寄存器堆。</p>
+  </div>
+<pre>第 1 层：操作系统（软件）
+  上下文切换 = 3 步
+    ① 保存当前线程的寄存器
+    ② 装入另一个线程的寄存器
+    ③ 跳到新线程的 PC
+        │
+        │ 每一步都是一串普通机器指令
+        ▼
+第 2 层：指令序列
+  ① = sw x1, 0(sp)     把 x1 存到内存
+      sw x2, 8(sp)     把 x2 存到内存
+      ...（每个寄存器一条，几十条）
+  ② = lw x1, 0(t0)     从内存读回 x1
+      lw x2, 8(t0)
+      ...（几十条）
+  ③ = jr ra            跳转，改写 PC
+        │
+        │ 每一条指令都要依次走过 5 个阶段
+        ▼
+第 3 层：流水线（硬件）
+  sw x1, 0(sp) → IF → ID → EX → MEM → WB
+  sw x2, 8(sp) →      IF → ID → EX → MEM → WB
+  ...</pre>
+  <p>图中的 RISC-V 指令是示意。Linux 实际的切换路径还包括调度器选择下一个线程的代码，所以实测的 0.75 μs（约 1,700 个周期）远多于搬运寄存器本身所需的周期。</p>
+  <h3>交汇点：PC 和寄存器堆</h3>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>流水线阶段</th><th>用到线程状态的哪部分</th></tr></thead>
+    <tbody>
+      <tr><td>IF</td><td>读 PC，决定取哪条指令</td></tr>
+      <tr><td>ID</td><td>读寄存器堆</td></tr>
+      <tr><td>WB</td><td>写寄存器堆</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>流水线本身没有“线程”这个概念。执行哪个线程，只取决于 IF 用哪个 PC、ID 和 WB 访问哪套寄存器。</p>
+  <h3>统一起来看</h3>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>概念</th><th>在流水线模型中对应什么</th></tr></thead>
+    <tbody>
+      <tr><td>一条指令</td><td>依次流过 IF→ID→EX→MEM→WB 的一个工作项</td></tr>
+      <tr><td>一个线程</td><td>一个 PC 加一套寄存器值，即一条指令流的来源</td></tr>
+      <tr><td>数据冒险</td><td>同一条指令流中后一条等前一条的结果，流水线空转</td></tr>
+      <tr><td>OS 上下文切换</td><td>用一串普通指令，把唯一的一份 PC 和寄存器换成另一个线程的</td></tr>
+      <tr><td>SMT 或 warp 调度</td><td>硬件保存多份 PC 和寄存器，IF 每周期选一份取指，用其他线程的指令填补空转</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>填补数据冒险的空转有三种办法：</p>
+  <ul class="tight">
+    <li>在同一条指令流里找独立指令：编译器改写代码，或者 CPU 乱序执行。</li>
+    <li>在硬件里同时放多条指令流：SMT、warp 调度。</li>
+  </ul>
+  <p>OS 切换线程不是为了填补这种空转，它太慢了（Q3）。它的作用是让更多软件线程轮流使用有限的硬件线程。</p>
+</section>
+
+<div class="part">存储</div>
+
+<!-- Q6 -->
+<section class="q" id="q6">
+  <h2><span class="n">Q6</span>global memory 是离 SM 很近、由程序员手动管理的 cache 吗？</h2>
+  <div class="ans">
+    <p>不是。global memory 是芯片外的显存，离 SM 最远、容量最大。离 SM 很近、由程序员显式管理的是 shared memory。</p>
+  </div>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>A100 40 GB</th><th>global memory</th><th>shared memory</th></tr></thead>
+    <tbody>
+      <tr><td>物理位置</td><td>芯片外的 HBM</td><td>每个 SM 内，与 L1 共用 192 KB SRAM</td></tr>
+      <tr><td>容量</td><td class="num">40 GB，整块 GPU</td><td class="num">每 SM 最多 164 KB</td></tr>
+      <tr><td>谁能访问</td><td>所有线程；host 可用 <code>cudaMemcpy</code> 读写</td><td>同一 block 内的线程</td></tr>
+      <tr><td>生命周期</td><td>从 <code>cudaMalloc</code> 到 <code>cudaFree</code>，跨越多次 kernel launch</td><td>所属 block 执行期间</td></tr>
+      <tr><td>是否经过缓存</td><td>经过 L2，可能经过 L1，由硬件管理</td><td>本身不是缓存，没有替换策略</td></tr>
+      <tr><td>管理方式</td><td>程序员分配和释放，缓存行为由硬件决定</td><td>程序员决定放什么、何时读写、何时同步</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>按离 SM 由近到远排列：寄存器（编译器分配）→ shared memory（程序员管理）与 L1（硬件管理）→ L2（硬件管理，全 GPU 共享）→ global memory → host memory（经 PCIe 或 NVLink 访问）。</p>
+</section>
+
+<!-- Q7 -->
+<section class="q" id="q7">
+  <h2><span class="n">Q7</span>shared memory、L1、L2 的性能差不多吗？区别只在于是否由程序员管理吗？</h2>
+  <div class="ans">
+    <p>在 A100 上，shared memory 和 L1 的延迟接近（23 和 33 个周期），L2 则慢得多（200 个周期，是 shared memory 的 8.7 倍）。shared memory 和 L1 的区别也不只是管理方式。</p>
+  </div>
+  <p>下表数据出自 Abdelkhalik 等人（2022）论文的 Table IV。测量方法是单线程 pointer chasing：每次读取的地址来自上一次读取的结果，所以测的是延迟。纳秒数按 1.41 GHz 换算。</p>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>存储</th><th>延迟（周期）</th><th>约合（ns）</th><th>与 shared load 之比</th></tr></thead>
+    <tbody>
+      <tr><td>shared memory（load / store）</td><td class="num">23 / 19</td><td class="num">16 / 13</td><td class="num">1×</td></tr>
+      <tr><td>L1 命中</td><td class="num">33</td><td class="num">23</td><td class="num">1.4×</td></tr>
+      <tr><td>L2 命中</td><td class="num">200</td><td class="num">142</td><td class="num">8.7×</td></tr>
+      <tr><td>global memory（绕过缓存）</td><td class="num">290</td><td class="num">206</td><td class="num">12.6×</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>原因：shared memory 和 L1 是 SM 内同一块 SRAM；L2 在 SM 之外，由 108 个 SM 共享，访问要经过片上互连。</p>
+  <h3>shared memory 和 L1 在延迟之外的区别</h3>
+  <div class="tbl">
+  <table>
+    <thead><tr><th></th><th>shared memory</th><th>L1</th></tr></thead>
+    <tbody>
+      <tr><td>会不会 miss</td><td>不会：数据是代码写进去的</td><td>会：miss 后去 L2 或 global memory 取，延迟升到 200–290 周期</td></tr>
+      <tr><td>延迟是否可预测</td><td>是，23 周期</td><td>取决于命中率</td></tr>
+      <tr><td>线程间交换数据</td><td>block 内线程读写同一地址</td><td>不作为通信手段</td></tr>
+      <tr><td>特有的性能问题</td><td>bank conflict：shared memory 分为 32 个 bank，同一 warp 的线程同时访问同一 bank 的不同地址时会被串行执行</td><td>缓存行被替换后需要重新读取</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>CUDA C++ Best Practices Guide 中有一个说法：shared memory 的延迟约为未缓存的 global memory 的 1/100。在 A100 上实测的比值是 23 : 290，约 1/13。读本 §10 已改用实测数据。</p>
+</section>
+
+<!-- Q8 -->
+<section class="q" id="q8">
+  <h2><span class="n">Q8</span>程序员怎样管理 shared memory？</h2>
+  <div class="ans">
+    <p>全部是显式管理：在 kernel 里声明数组，用普通赋值语句把数据从 global memory 搬进来，用 <code>__syncthreads()</code> 保证 block 内的写入完成后再读，最后把结果写回 global memory。block 结束时 shared memory 由硬件自动回收。</p>
+  </div>
+  <h3>分配</h3>
+<pre><span class="c">// 静态分配：大小在编译时确定，每个 block 一份</span>
+<span class="k">__shared__</span> float buf[256];
+
+<span class="c">// 动态分配：大小在 launch 时以字节数作为执行配置的第三个参数传入</span>
+<span class="k">extern __shared__</span> float buf[];</pre>
+  <p>静态分配每个 block 最多 48 KB。要用到 48 KB 以上（A100 最多 164 KB），必须用动态分配，并且在 launch 前调用：</p>
+<pre>cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, 字节数);</pre>
+  <h3>最常见的四步写法</h3>
+  <p>作业中 <code>cuda/m3_simt/02_sync_matters.cu</code> 给出的代码，把每个 block 负责的 256 个元素倒序：</p>
+<pre><span class="k">__shared__</span> float buf[BLOCK];          <span class="c">// ① 声明</span>
+int base = blockIdx.x * BLOCK;
+int t = threadIdx.x;
+buf[t] = in[base + t];                <span class="c">// ② 装入：global → shared</span>
+<span class="k">__syncthreads</span>();                      <span class="c">// ③ 同步：等 block 内所有线程写完</span>
+out[base + t] = buf[BLOCK - 1 - t];   <span class="c">// ④ 读另一个线程写入的元素，结果写回 global</span></pre>
+  <ul class="tight">
+    <li>第 ② 步：硬件不会自动装入，必须由线程用赋值语句写入。</li>
+    <li>第 ③ 步：<code>__syncthreads()</code> 让 block 内每个线程都停下，直到所有线程到达，保证第 ② 步的写入在第 ④ 步读取前完成。</li>
+    <li>多轮复用同一块 shared memory 时，下一轮装入前还要再同步一次，否则有线程可能覆盖别的线程尚未读完的数据。</li>
+  </ul>
+  <p>去掉第 ③ 步会出现什么现象、为什么，是 prob 3.3 的实验内容。</p>
+  <h3>两种用途</h3>
+  <ul class="tight">
+    <li><strong>线程间交换数据</strong>：上例中线程 t 读的是线程 BLOCK−1−t 写入的值。若改用 global memory 交换，A100 上每次读取约 290 周期，shared memory 为 23 周期（Q7）。</li>
+    <li><strong>复用数据</strong>：同一个 global memory 元素被 block 内多个线程读取时，先读一次放进 shared memory，后续读取都按 23 周期计。作业 prob 4.2（stencil）和 Bonus（matmul）属于这一类。</li>
+  </ul>
+  <h3>异步复制</h3>
+  <p>普通写法里，数据先从 global memory 读进寄存器，再写入 shared memory。较新的 GPU 提供了不经寄存器的异步复制，复制期间线程可以继续计算：</p>
+  <ul class="tight">
+    <li>compute capability 8.0 及以上（含 A100）：<code>cp.async</code> 指令，C++ 中为 <code>cuda::memcpy_async</code>。</li>
+    <li>compute capability 9.0 及以上（如 H100）：TMA（Tensor Memory Accelerator），一次复制一整块多维数据。</li>
+  </ul>
+</section>
+
+<section class="q" id="data">
+  <h2><span class="n">数据</span>本复习本中的实测数据</h2>
+  <p>实验机：Intel Xeon 2.30 GHz 云主机，4 vCPU，未开启 SMT，gcc 13.3。源码都在仓库的 <code>assignment01/notes/</code> 目录，文件开头注明了编译命令。</p>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>测量对象</th><th>方法</th><th>结果</th><th>源码</th></tr></thead>
+    <tbody>
+      <tr><td>double 加法延迟与吞吐</td><td>K 条独立累加链，总次数固定</td><td class="num">K=1：0.528 ns；K≥8：0.132 ns</td><td><code>ilp_chains.c</code></td></tr>
+      <tr><td>线程上下文切换</td><td>两个线程绑定在同一 CPU 上，用管道互传 1 字节，减去同线程读写管道的耗时</td><td class="num">约 0.75 μs（3 次运行 0.74–0.80）</td><td><code>ctx_switch.c</code></td></tr>
+      <tr><td>DRAM 随机访问延迟</td><td>512 MB 数组上的 pointer chasing</td><td class="num">约 142 ns（2 次运行 142.3、143.5）</td><td><code>pointer_chase.c</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>补充说明：</p>
+  <ul class="tight">
+    <li>DRAM 测量按 4 KB 页随机访问，结果包含 TLB miss 后的页表遍历时间。</li>
+    <li>上下文切换的测量值包含内核唤醒和调度另一个线程的开销。</li>
+  </ul>
+</section>
+
+<footer class="refs" id="refs">
+  <strong style="color:var(--fg)">参考资料</strong>
+  <ol>
+    <li>NVIDIA，<a href="https://docs.nvidia.com/cuda/cuda-programming-guide/">CUDA Programming Guide</a>，附录 Compute Capabilities。</li>
+    <li>NVIDIA，<a href="https://images.nvidia.com/aem-dam/en-zz/Solutions/data-center/nvidia-ampere-architecture-whitepaper.pdf">NVIDIA A100 Tensor Core GPU Architecture</a> 白皮书：SM 分区、寄存器、缓存容量。</li>
+    <li>H. Abdelkhalik et al., <a href="https://arxiv.org/abs/2208.11174">Demystifying the Nvidia Ampere Architecture through Microbenchmarking and Instruction-level Analysis</a>, 2022，Table IV。</li>
+    <li>NVIDIA，<a href="https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/">CUDA C++ Best Practices Guide</a>。</li>
+    <li>AMD，<a href="https://www.amd.com/en/products/processors/server/epyc/7002-series/amd-epyc-7742.html">EPYC 7742</a> 产品规格。</li>
+  </ol>
+</footer>
+</main>
+</div>
+
+<script>
+try{
+  const links=[...document.querySelectorAll(".rail a")];
+  const map=new Map(links.map(a=>[a.getAttribute("href").slice(1),a]));
+  const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.remove("on"));const a=map.get(e.target.id);if(a)a.classList.add("on");}})},{rootMargin:"-20% 0px -70% 0px"});
+  map.forEach((a,id)=>{const t=document.getElementById(id);if(t)io.observe(t);});
+}catch(e){}
+</script>

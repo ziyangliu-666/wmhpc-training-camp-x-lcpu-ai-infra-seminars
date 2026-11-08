@@ -88,6 +88,7 @@ th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--rule);verti
 th{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;color:var(--mute);font-weight:400}
 td.num{font-variant-numeric:tabular-nums;font-family:var(--f-mono);font-size:13.5px;white-space:nowrap}
 pre{background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:14px 16px;overflow-x:auto;font-family:var(--f-mono);font-size:13.5px;line-height:1.7;margin:16px 0}
+pre.layers{line-height:1.55;font-size:13px}
 pre .k{color:var(--gpu)} pre .c{color:var(--mute)} pre .s{color:var(--cpu)}
 .src{font-size:13px;color:var(--mute)}
 .quote{border-left:3px solid var(--rule);padding:2px 0 2px 14px;color:#c9d0db;margin:14px 0}
@@ -116,6 +117,7 @@ pre .k{color:var(--gpu)} pre .c{color:var(--mute)} pre .s{color:var(--cpu)}
     <li><a href="#s9"><span>§9</span><span>tile 编程模型</span></a></li>
     <li><a href="#s10"><span>§10</span><span>存储层次</span></a></li>
     <li><a href="#s11"><span>§11</span><span>unified memory</span></a></li>
+    <li><a href="#appA"><span>附录 A</span><span>线程、指令、流水线</span></a></li>
   </ol>
   <h2>其他</h2>
   <ol>
@@ -470,6 +472,7 @@ pre .k{color:var(--gpu)} pre .c{color:var(--mute)} pre .s{color:var(--cpu)}
   </table>
   </div>
   <p>Guide 同时要求：程序不得假定同一 warp 的线程总是逐条指令同步推进（lockstep）。例如，一个线程不经同步就读取同一 warp 另一线程刚写入 shared memory 的值，就依赖了这一假定。违反这条要求的程序行为未定义，在不同架构上可能不同。图 8 只是一种可能的执行顺序，Guide 并不保证 warp 一定按这个顺序执行。</p>
+  <p>warp 调度器在每个时钟周期选一个 warp 发射指令。这和 OS 切换线程不是同一层的机制，两者的关系见<a href="#appA">附录 A</a>。</p>
 </section>
 
 <section class="sec" id="s9">
@@ -512,7 +515,19 @@ pre .k{color:var(--gpu)} pre .c{color:var(--mute)} pre .s{color:var(--cpu)}
   </table>
   </div>
   <p>A100 的 192 KB 统一数据缓存中，最多 164 KB 可以配置为 shared memory，其余至少 28 KB 用作 L1。</p>
-  <p>访问延迟随离 SM 的距离增加。CUDA C++ Best Practices Guide 的 Shared Memory 一节给出：在没有 bank conflict 时，shared memory 的延迟约为未缓存的 global memory 的 1/100。</p>
+  <p>访问延迟随离 SM 的距离增加。Abdelkhalik 等人（2022）在 A100 上用单线程 pointer chasing 测得的延迟如下，纳秒数按 1.41 GHz 换算：</p>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>存储</th><th>延迟（周期）</th><th>约合（ns）</th><th>与 shared memory load 之比</th></tr></thead>
+    <tbody>
+      <tr><td>shared memory（load / store）</td><td class="num">23 / 19</td><td class="num">16 / 13</td><td class="num">1×</td></tr>
+      <tr><td>L1 命中</td><td class="num">33</td><td class="num">23</td><td class="num">1.4×</td></tr>
+      <tr><td>L2 命中</td><td class="num">200</td><td class="num">142</td><td class="num">8.7×</td></tr>
+      <tr><td>global memory（绕过缓存）</td><td class="num">290</td><td class="num">206</td><td class="num">12.6×</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>shared memory 和 L1 是 SM 内同一块 SRAM，所以延迟接近。L2 在 SM 之外，由所有 SM 共享，延迟是 shared memory 的 8.7 倍。</p>
   <p>shared memory 分为 32 个 bank。同一 warp 的多个线程同时访问同一个 bank 的不同地址时，这些访问会被串行执行，这就是 bank conflict。</p>
   <h4>global memory 与 host memory（Guide 1.2.3.1）</h4>
   <p>GPU 的 DRAM 在 device code 中称为 global memory，同一块 GPU 的所有 SM 都能访问。CPU 和 GPU 共用一个统一虚拟地址空间：由一个地址可以判断它属于 CPU 内存还是哪一块 GPU 的显存。分配、复制和数据位置由 CUDA API 显式控制。</p>
@@ -541,6 +556,38 @@ block 的 shared memory 用量  ≤ SM 可用的 shared memory</pre>
   <p>Guide 还提到 mapped memory：GPU 经 PCIe 或 NVLink 直接访问 CPU 内存。它的延迟比显存高、带宽比显存低，不能代替显存使用。</p>
 </section>
 
+<section class="sec" id="appA">
+  <h3><span class="n">附录 A</span>线程、指令、流水线是上下三层</h3>
+  <p>计算机组成课讲的 5 级流水线（IF 取指、ID 译码并读寄存器、EX 执行、MEM 访存、WB 写回寄存器）描述的是一条指令如何被执行。操作系统课讲的线程描述的是指令从哪里来：一个线程在硬件上就是一个 PC（程序计数器）加一套寄存器的值。</p>
+  <p>OS 的上下文切换由一串普通机器指令完成，每条指令都要走一遍流水线，三者的关系如下（RISC-V 指令，示意）：</p>
+<pre class="layers">第 1 层：操作系统（软件）
+  上下文切换 = 3 步
+    ① 保存当前线程的寄存器
+    ② 装入另一个线程的寄存器
+    ③ 跳到新线程的 PC
+        │
+        │ 每一步都是一串普通机器指令
+        ▼
+第 2 层：指令序列
+  ① = sw x1, 0(sp)     把 x1 存到内存
+      sw x2, 8(sp)     把 x2 存到内存
+      ...（每个寄存器一条，几十条）
+  ② = lw x1, 0(t0)     从内存读回 x1
+      lw x2, 8(t0)
+      ...（几十条）
+  ③ = jr ra            跳转，改写 PC
+        │
+        │ 每一条指令都要依次走过 5 个阶段
+        ▼
+第 3 层：流水线（硬件）
+  sw x1, 0(sp) → IF → ID → EX → MEM → WB
+  sw x2, 8(sp) →      IF → ID → EX → MEM → WB
+  ...</pre>
+  <p>两个模型的交汇点是 PC 和寄存器堆：IF 读 PC，ID 读寄存器堆，WB 写寄存器堆。上下文切换就是用一串指令把这份状态换成另一个线程的。</p>
+  <p>在本书的实验机上测得，一次线程切换约 0.75 μs（源码 <code>assignment01/notes/ctx_switch.c</code>）。其中除了保存和恢复寄存器，还包括调度器选择下一个线程的代码。</p>
+  <p>SMT 硬件线程和 GPU 的 warp 走的是另一条路：硬件里同时保存多份 PC 和寄存器，IF 每个周期选一份来取指。这样第 1 层和第 2 层就不存在了，切换开销为零。</p>
+</section>
+
 <section class="sec" id="hw">
   <h3><span class="n">作业</span>本书各节对应的作业题</h3>
   <p>按仓库的 AI 使用政策，这里只列出相关章节，不给答案。</p>
@@ -562,7 +609,8 @@ block 的 shared memory 用量  ≤ SM 可用的 shared memory</pre>
   <strong style="color:var(--fg)">参考资料</strong>
   <ol>
     <li>NVIDIA，CUDA Programming Guide：<a href="https://docs.nvidia.com/cuda/cuda-programming-guide/01-introduction/introduction.html">1.1 Introduction</a>，<a href="https://docs.nvidia.com/cuda/cuda-programming-guide/01-introduction/programming-model.html">1.2 Programming Model</a>。</li>
-    <li>NVIDIA，<a href="https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/">CUDA C++ Best Practices Guide</a>，Occupancy 与 Shared Memory 两节。</li>
+    <li>NVIDIA，<a href="https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/">CUDA C++ Best Practices Guide</a>，Occupancy 一节。</li>
+    <li>H. Abdelkhalik et al., <a href="https://arxiv.org/abs/2208.11174">Demystifying the Nvidia Ampere Architecture through Microbenchmarking and Instruction-level Analysis</a>, 2022，Table IV：A100 各级存储的访问延迟。</li>
     <li>NVIDIA，<a href="https://images.nvidia.com/aem-dam/en-zz/Solutions/data-center/nvidia-ampere-architecture-whitepaper.pdf">NVIDIA A100 Tensor Core GPU Architecture</a> 白皮书，A100 的 SM 数、时钟、FP32 峰值、带宽、寄存器、缓存容量。</li>
     <li>AMD，<a href="https://www.amd.com/en/products/processors/server/epyc/7002-series/amd-epyc-7742.html">EPYC 7742</a> 产品规格：核数、线程数、时钟、内存通道。</li>
     <li>§2 实验源码：<code>assignment01/notes/ilp_chains.c</code>。</li>
